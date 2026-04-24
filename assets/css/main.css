@@ -1,0 +1,439 @@
+/* assets/css/main.css
+ * PingRyde Design System — Global Styles
+ * ─────────────────────────────────────────────────────────────────
+ * WHAT THIS FILE CONTAINS:
+ *   1. CSS custom properties (design tokens — colours, fonts, sizes)
+ *   2. Base reset / typography
+ *   3. Reusable component classes (.pr-card, .pr-btn, .pr-input …)
+ *   4. Map-specific styles
+ *   5. Utility classes
+ *
+ * RESPONSIVE PHILOSOPHY:
+ *   "Mobile-first" means we write base styles for mobile,
+ *   then add @media queries for larger screens.
+ *   Every component works on a 320px phone AND a 1920px monitor.
+ * ─────────────────────────────────────────────────────────────────
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   1. DESIGN TOKENS
+   Change a value here → it updates everywhere in the app.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+:root {
+  /* Brand colours */
+  --pr-teal:     #00D4B8;   /* Primary — active states, buttons, highlights  */
+  --pr-orange:   #FF6B35;   /* Secondary — driver alerts, notifications        */
+
+  /* Background layers — darkest to lightest */
+  --pr-bg:       #1E2A32;   /* Page / app background                          */
+  --pr-surface:  #243340;   /* Cards, panels                                  */
+  --pr-surface2: #2C3E4C;   /* Inputs, elevated elements                      */
+  --pr-border:   rgba(255,255,255,0.08); /* Subtle borders                   */
+
+  /* Text */
+  --pr-text:     #FFFFFF;
+  --pr-muted:    #8FA3B1;   /* Secondary / placeholder text                   */
+
+  /* Semantic */
+  --pr-yellow:   #F0C040;   /* Pending / warning                              */
+  --pr-red:      #FF4747;   /* Error / cancel                                 */
+
+  /* Typography */
+  --font-display: 'Syne', sans-serif;   /* Headings, brand text               */
+  --font-body:    'DM Sans', sans-serif;/* Body text, labels, inputs           */
+
+  /* Shape */
+  --pr-radius:    12px;
+  --pr-radius-sm: 8px;
+  --pr-radius-xs: 6px;
+
+  /* Layout */
+  --pr-max-w:  1100px;  /* Max content width for wide screens                 */
+  --pr-px:     16px;    /* Horizontal page padding — increases on larger screens */
+  --pr-py:     20px;    /* Vertical page padding                               */
+}
+
+/* Increase padding on larger screens */
+@media (min-width: 640px)  { :root { --pr-px: 24px; --pr-py: 28px; } }
+@media (min-width: 1024px) { :root { --pr-px: 40px; --pr-py: 36px; } }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   2. BASE RESET & TYPOGRAPHY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  /* Smooth font rendering on all systems */
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior:          smooth;
+  /* Prevents horizontal scroll caused by overflowing elements */
+  overflow-x: hidden;
+}
+
+body {
+  font-family:            var(--font-body);
+  background-color:       var(--pr-bg);
+  color:                  var(--pr-text);
+  line-height:            1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  /* Stop bounce scroll from showing a white edge on mobile */
+  overscroll-behavior:    none;
+  overflow-x:             hidden;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  line-height: 1.25;
+}
+
+/* Remove default button styles — we apply our own */
+button { cursor: pointer; font-family: inherit; }
+
+/* Remove default link underlines inside the app */
+a { text-decoration: none; }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   3. PAGE CONTAINER
+   Wraps each page's content. Centred on wide screens.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-page {
+  width:     100%;
+  max-width: var(--pr-max-w);
+  margin:    0 auto;
+  /* Responsive padding via CSS variable */
+  padding:   var(--pr-py) var(--pr-px) 48px;
+}
+
+/* Notch / safe area helpers for phones */
+.pr-safe-top    { padding-top:    max(env(safe-area-inset-top,    0px), 8px); }
+.pr-safe-bottom { padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px); }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   4. CARD COMPONENT
+   The basic "panel" used for all content blocks.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-card {
+  background:    var(--pr-surface);
+  border-radius: var(--pr-radius);
+  border:        1px solid var(--pr-border);
+  padding:       18px;
+  /* Smooth hover transition for interactive cards */
+  transition:    border-color 0.2s;
+}
+@media (min-width: 768px) {
+  .pr-card { padding: 24px; }
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   5. BUTTON COMPONENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/*
+ * Base button — all buttons inherit these properties.
+ * Specific variants (.pr-btn-primary etc.) add colour.
+ */
+.pr-btn {
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  gap:             8px;
+  width:           100%;           /* Full-width by default */
+  padding:         14px 20px;
+  border-radius:   var(--pr-radius);
+  font-family:     var(--font-body);
+  font-size:       15px;
+  font-weight:     500;
+  border:          none;
+  /* Press feedback — scale down slightly on tap/click */
+  transition:      transform 0.1s ease, opacity 0.1s ease, filter 0.15s ease;
+  -webkit-tap-highlight-color: transparent; /* Remove iOS blue flash */
+  user-select:     none;
+}
+.pr-btn:active:not(:disabled) { transform: scale(0.97); opacity: 0.9; }
+.pr-btn:disabled               { opacity: 0.4; cursor: not-allowed; }
+.pr-btn:hover:not(:disabled)   { filter: brightness(1.08); }
+
+/* Auto-width variant — use for inline / side-by-side buttons */
+.pr-btn-inline { width: auto; padding: 11px 22px; }
+
+/* Primary — teal fill, dark text */
+.pr-btn-primary {
+  background:  var(--pr-teal);
+  color:       #1E2A32;
+  font-weight: 600;
+}
+
+/* Secondary — orange fill */
+.pr-btn-secondary {
+  background: var(--pr-orange);
+  color:      #fff;
+}
+
+/* Outline — transparent with teal border */
+.pr-btn-outline {
+  background:   transparent;
+  color:        var(--pr-teal);
+  border:       1px solid rgba(0,212,184,0.4);
+}
+
+/* Danger — transparent with red border */
+.pr-btn-danger {
+  background: transparent;
+  color:      var(--pr-red);
+  border:     1px solid rgba(255,71,71,0.4);
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   6. STATUS BADGE
+   Small coloured pill that shows e.g. "Pending", "Online", "Active"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-badge {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           5px;
+  padding:       4px 10px;
+  border-radius: 999px;
+  font-size:     11px;
+  font-weight:   600;
+  white-space:   nowrap;
+  letter-spacing:0.02em;
+}
+/* Small coloured dot before the label */
+.pr-badge::before {
+  content:      '';
+  width:        5px;
+  height:       5px;
+  border-radius:50%;
+  background:   currentColor;
+  flex-shrink:  0;
+}
+.pr-badge-active   { color: var(--pr-teal);   background: rgba(0,212,184,0.12); }
+.pr-badge-pending  { color: var(--pr-yellow); background: rgba(240,192,64,0.12); }
+.pr-badge-inactive { color: var(--pr-red);    background: rgba(255,71,71,0.12); }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   7. FORM INPUTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-input {
+  width:         100%;
+  background:    var(--pr-surface2);
+  border:        1px solid var(--pr-border);
+  border-radius: var(--pr-radius-sm);
+  color:         var(--pr-text);
+  font-family:   var(--font-body);
+  font-size:     15px;
+  padding:       13px 16px;
+  outline:       none;
+  transition:    border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none; /* Remove iOS styling */
+}
+.pr-input:focus {
+  border-color: rgba(0,212,184,0.5);
+  box-shadow:   0 0 0 3px rgba(0,212,184,0.08);
+}
+.pr-input::placeholder { color: var(--pr-muted); }
+
+/* Dropdown select — adds custom arrow icon */
+.pr-select {
+  appearance:          none;
+  background-image:    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238FA3B1' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:   no-repeat;
+  background-position: right 14px center;
+  padding-right:       38px;
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   8. TOGGLE SWITCH
+   Used for the driver online/offline toggle on the dashboard.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-toggle        { position:relative; width:54px; height:30px; cursor:pointer; display:inline-block; flex-shrink:0; }
+.pr-toggle input  { display:none; }
+/* Track — the sliding background */
+.pr-toggle-track  {
+  width:100%; height:100%; border-radius:15px;
+  background:var(--pr-surface2); border:1px solid var(--pr-border);
+  transition:background 0.3s, border-color 0.3s;
+}
+.pr-toggle input:checked + .pr-toggle-track {
+  background:   var(--pr-teal);
+  border-color: var(--pr-teal);
+}
+/* Thumb — the sliding circle */
+.pr-toggle-thumb  {
+  position:absolute; top:4px; left:4px; width:22px; height:22px;
+  border-radius:50%; background:white;
+  transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1); /* spring effect */
+  box-shadow:0 1px 4px rgba(0,0,0,0.25);
+  pointer-events:none;
+}
+.pr-toggle input:checked ~ .pr-toggle-thumb { transform:translateX(24px); }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   9. AVATAR CIRCLE
+   Round initials circle for user/driver representation.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-avatar {
+  border-radius: 50%;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  font-weight:   700;
+  font-family:   var(--font-display);
+  flex-shrink:   0;
+}
+.pr-avatar-teal   { background: rgba(0,212,184,0.15); color: var(--pr-teal); }
+.pr-avatar-orange { background: rgba(255,107,53,0.15); color: var(--pr-orange); }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   10. MAP CONTAINER
+   ─────────────────────────────────────────────────────────────
+   CRITICAL: Leaflet requires the map container to have a real,
+   non-zero pixel height at the moment L.map() is called.
+   If the height is 0, tiles never load and the map is blank.
+
+   Rules:
+   • display:block — prevents flex/grid from collapsing height
+   • Never use height:auto — must be an explicit pixel value
+   • The component sets height via :style="{ height: '300px' }"
+   • We also call map.invalidateSize() after mount as a backup
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.pr-map {
+  width:         100%;
+  display:       block;         /* CRITICAL — prevents height collapse       */
+  border-radius: var(--pr-radius);
+  overflow:      hidden;
+  background:    var(--pr-surface2);  /* Shown while tiles are loading        */
+}
+
+/* Dim map tiles to match dark UI theme */
+.leaflet-tile-pane { filter: brightness(0.78) saturate(0.45); }
+.leaflet-container { background: var(--pr-surface2) !important; }
+
+/* Prevent Leaflet z-index from clashing with our sticky header (z-index 200) */
+.leaflet-pane    { z-index: 10 !important; }
+.leaflet-control { z-index: 20 !important; }
+
+/* Make Leaflet popup match our dark theme */
+.leaflet-popup-content-wrapper {
+  background:    var(--pr-surface) !important;
+  color:         var(--pr-text)    !important;
+  border-radius: var(--pr-radius)  !important;
+  border:        1px solid var(--pr-border) !important;
+  box-shadow:    0 4px 20px rgba(0,0,0,0.4) !important;
+}
+.leaflet-popup-tip { background: var(--pr-surface) !important; }
+.leaflet-popup-close-button { color: var(--pr-muted) !important; }
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   11. UTILITY CLASSES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+/* Thin horizontal separator line */
+.pr-divider { height:1px; background:var(--pr-border); }
+
+/* Section header (label + optional action link) */
+.pr-section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.pr-section-label  { font-size:10px; font-weight:700; color:var(--pr-muted); letter-spacing:0.1em; text-transform:uppercase; }
+
+/* Horizontally scrollable chip row — used for region filters */
+.pr-chips {
+  display:          flex;
+  gap:              8px;
+  overflow-x:       auto;
+  padding-bottom:   6px;
+  scrollbar-width:  none;       /* Firefox */
+  -webkit-overflow-scrolling: touch; /* Smooth iOS scroll */
+}
+.pr-chips::-webkit-scrollbar { display:none; } /* Chrome/Safari */
+
+/* Individual filter chip */
+.pr-chip {
+  padding:       7px 14px;
+  border-radius: 999px;
+  font-size:     12px;
+  font-weight:   500;
+  white-space:   nowrap;
+  cursor:        pointer;
+  border:        none;
+  transition:    all 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pr-chip-active   { background:var(--pr-teal);   color:#1E2A32; font-weight:600; }
+.pr-chip-inactive { background:var(--pr-surface); color:var(--pr-muted); border:1px solid var(--pr-border); }
+.pr-chip-inactive:hover { border-color: rgba(0,212,184,0.3); color: var(--pr-text); }
+
+/* Responsive grid helpers — used on stats cards, type selectors etc. */
+.pr-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.pr-grid-3 { display:grid; grid-template-columns:1fr; gap:14px; }
+@media (min-width: 640px) { .pr-grid-3 { grid-template-columns:repeat(3,1fr); } }
+
+/* Error message box */
+.pr-error {
+  padding:       12px 16px;
+  border-radius: var(--pr-radius-sm);
+  font-size:     13px;
+  background:    rgba(255,71,71,0.08);
+  border:        1px solid rgba(255,71,71,0.25);
+  color:         var(--pr-red);
+}
+
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   12. SUBTLE PAGE ANIMATIONS
+   Only small, purposeful animations — nothing that slows loading.
+   We use CSS transitions (hardware-accelerated) not JS animations.
+   All animations respect prefers-reduced-motion.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Cards that should animate in when they appear */
+.pr-animate-in {
+  animation: prFadeUp 0.3s ease both;
+}
+@keyframes prFadeUp {
+  from { opacity:0; transform:translateY(12px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* Staggered children (add --delay CSS var on each child) */
+.pr-animate-stagger > * {
+  animation: prFadeUp 0.3s ease both;
+}
+.pr-animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.pr-animate-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.pr-animate-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.pr-animate-stagger > *:nth-child(4) { animation-delay: 180ms; }
+
+/* Spinner for loading states */
+@keyframes prSpin { to { transform: rotate(360deg); } }
+.pr-spin { animation: prSpin 0.8s linear infinite; display:inline-block; }
+
+/* Respect the user's motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .pr-animate-in,
+  .pr-animate-stagger > *,
+  .pr-spin,
+  .animate-bounce,
+  .animate-pulse,
+  .animate-ping { animation: none !important; transition: none !important; }
+}
+
+/* Focus ring for keyboard navigation accessibility */
+:focus-visible {
+  outline:        2px solid var(--pr-teal);
+  outline-offset: 2px;
+}
