@@ -73,8 +73,10 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior:          smooth;
-  /* Prevents horizontal scroll caused by overflowing elements */
-  overflow-x: hidden;
+  overflow-x:               hidden;
+  /* Let the html element scroll — required for mouse-wheel to work */
+  overflow-y:               scroll;
+  height:                   100%;
 }
 
 body {
@@ -84,9 +86,9 @@ body {
   line-height:            1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing:grayscale;
-  /* Stop bounce scroll from showing a white edge on mobile */
-  overscroll-behavior:    none;
+  /* NOTE: overscroll-behavior:none was blocking mouse-wheel scroll — removed */
   overflow-x:             hidden;
+  min-height:             100%;
 }
 
 h1, h2, h3, h4, h5 {
@@ -300,35 +302,22 @@ a { text-decoration: none; }
 
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   10. MAP CONTAINER
+   10. MAP — GLOBAL LEAFLET OVERRIDES
    ─────────────────────────────────────────────────────────────
-   CRITICAL: Leaflet requires the map container to have a real,
-   non-zero pixel height at the moment L.map() is called.
-   If the height is 0, tiles never load and the map is blank.
-
-   Rules:
-   • display:block — prevents flex/grid from collapsing height
-   • Never use height:auto — must be an explicit pixel value
-   • The component sets height via :style="{ height: '300px' }"
-   • We also call map.invalidateSize() after mount as a backup
+   These rules apply to every Leaflet map on the page.
+   Component-level layout (.map-outer, .pr-map-outer) and the
+   satellite toggle button are defined in each component's
+   <style scoped> block so they don't leak.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-.pr-map {
-  width:         100%;
-  display:       block;         /* CRITICAL — prevents height collapse       */
-  border-radius: var(--pr-radius);
-  overflow:      hidden;
-  background:    var(--pr-surface2);  /* Shown while tiles are loading        */
-}
 
-/* Dim map tiles to match dark UI theme */
-.leaflet-tile-pane { filter: brightness(0.78) saturate(0.45); }
+/* Match map background to dark theme while tiles are loading */
 .leaflet-container { background: var(--pr-surface2) !important; }
 
-/* Prevent Leaflet z-index from clashing with our sticky header (z-index 200) */
+/* Keep Leaflet panes below our sticky header (z-index 200) */
 .leaflet-pane    { z-index: 10 !important; }
 .leaflet-control { z-index: 20 !important; }
 
-/* Make Leaflet popup match our dark theme */
+/* Dark-themed popup */
 .leaflet-popup-content-wrapper {
   background:    var(--pr-surface) !important;
   color:         var(--pr-text)    !important;
@@ -336,8 +325,9 @@ a { text-decoration: none; }
   border:        1px solid var(--pr-border) !important;
   box-shadow:    0 4px 20px rgba(0,0,0,0.4) !important;
 }
-.leaflet-popup-tip { background: var(--pr-surface) !important; }
+.leaflet-popup-tip          { background: var(--pr-surface) !important; }
 .leaflet-popup-close-button { color: var(--pr-muted) !important; }
+
 
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -5,9 +5,20 @@
 <template>
   <div class="pr-page">
 
-    <div style="margin-bottom:24px">
-      <h1 style="font-size:22px;font-weight:800;margin:0 0 4px">My Rides</h1>
-      <p style="font-size:13px;color:var(--pr-muted);margin:0">Your ride history</p>
+    <div style="margin-bottom:24px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div>
+        <h1 style="font-size:22px;font-weight:800;margin:0 0 4px">My Rides</h1>
+        <p style="font-size:13px;color:var(--pr-muted);margin:0">Your ride history</p>
+      </div>
+      <!-- Clear history — only shown when there are completed/cancelled/expired rides -->
+      <button
+        v-if="allRides.some(r => ['completed','cancelled','expired'].includes(r.status))"
+        @click="clearHistory"
+        :disabled="clearing"
+        style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,71,71,0.3);background:rgba(255,71,71,0.08);color:var(--pr-red);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap"
+      >
+        {{ clearing ? 'Clearing...' : '🗑️ Clear History' }}
+      </button>
     </div>
 
     <!-- Status filter -->
@@ -124,15 +135,17 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '~/store/user'
-import { API_BASE }     from '~/utils/api'
+import { useUserStore }            from '~/store/user'
+import { API_BASE, BACKEND_URL }   from '~/utils/api'
+// BACKEND_URL is now imported from utils/api.js — change the host
+// there once to update it everywhere in the app.
 
-const BACKEND_URL = 'http://localhost:5000'
 const userStore   = useUserStore()
 
 const allRides    = ref([])
 const loading     = ref(true)
 const cancelling  = ref(null)
+const clearing    = ref(false)   // true while the clear-history request is in flight
 const activeFilter= ref('')
 
 const filters = [
@@ -189,6 +202,26 @@ const cancelRide = async (rideId) => {
     console.error('Cancel error:', err)
   } finally {
     cancelling.value = null
+  }
+}
+
+// Clear all completed/cancelled/expired rides from history
+// Only removes "safe" statuses — active rides are not affected.
+const clearHistory = async () => {
+  if (!confirm('Clear all completed, cancelled and expired rides from your history?')) return
+  clearing.value = true
+  try {
+    await $fetch(`${API_BASE}/rides/passenger/${userStore._id}/clear-history`, {
+      method: 'DELETE',
+    })
+    // Remove locally — no need to refetch
+    allRides.value = allRides.value.filter(r =>
+      !['completed','cancelled','expired'].includes(r.status)
+    )
+  } catch (err) {
+    console.error('Clear history error:', err)
+  } finally {
+    clearing.value = false
   }
 }
 </script>

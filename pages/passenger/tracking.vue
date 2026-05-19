@@ -24,11 +24,11 @@
 
     <!-- ── Map ─────────────────────────────────────────────────── -->
     <!--
-      FIXED: was <SharedMapView> — now correctly <MapView>
+      FIXED: was <PingMap> — now correctly <PingMap>
       MapView is at components/MapView.vue → named "MapView" by Nuxt
     -->
     <div class="track-map-wrap">
-      <MapView
+      <PingMap
         :height="mapHeight"
         :passenger-coords="rideStore.passengerLocation"
         :driver-coords="rideStore.driverLocation"
@@ -305,14 +305,13 @@ import { useRideStore }   from '~/store/ride'
 import { useUserStore }   from '~/store/user'
 import { useSocket }      from '~/composables/useSocket'
 import { useGeolocation } from '~/composables/useGeolocation'
-import { API_BASE }       from '~/utils/api'
+import { API_BASE, BACKEND_URL } from '~/utils/api'
 
-const BACKEND_URL = 'http://localhost:5000'
 
 const router    = useRouter()
 const rideStore = useRideStore()
 const userStore = useUserStore()
-const { connect, registerPassenger, joinRide } = useSocket()
+const { connect, registerPassenger, joinRide, sendPassengerLocation } = useSocket()
 const { startWatching, stopWatching }           = useGeolocation()
 
 // UI state
@@ -341,8 +340,8 @@ const statusLabel = computed(() => ({
 }[rideStore.ride?.status] || 'Pending'))
 
 const mapHeight = computed(() => {
-  if (typeof window === 'undefined') return '280px'
-  return window.innerWidth >= 1024 ? '400px' : '280px'
+  if (typeof window === 'undefined') return '300px'
+  return window.innerWidth >= 768 ? '380px' : '300px'
 })
 
 // Unread chat messages (from driver, not yet viewed)
@@ -375,8 +374,13 @@ onMounted(async () => {
   if (userStore._id) registerPassenger(userStore._id)
   joinRide(rideStore.ride._id)
 
-  // Stream our GPS
-  startWatching((coords) => rideStore.updatePassengerLocation(coords))
+  // Stream our GPS to both the store (for local map) AND the driver via socket
+  startWatching((coords) => {
+    rideStore.updatePassengerLocation(coords)
+    if (rideStore.ride?._id) {
+      sendPassengerLocation(rideStore.ride._id, coords.lat, coords.lng)
+    }
+  })
 
   // Expiry countdown
   if (rideStore.ride.expiresAt) {
@@ -409,7 +413,16 @@ watch(() => rideStore.chatMessages.length, async () => {
   if (chatEl.value) chatEl.value.scrollTop = chatEl.value.scrollHeight
 })
 
-// ── Actions ────────────────────────────────────────────────────────
+// When the ride gets accepted while this page is open, load chat history.
+// rideStore.chatReady is set to true by useSocket's rideAcceptedPassenger handler.
+watch(() => rideStore.chatReady, async (ready) => {
+  if (ready && rideStore.ride?._id) {
+    await loadChat()
+    rideStore.setChatReady(false)  // reset so it can fire again on reconnect
+  }
+})
+
+// ── Actions ─────────────────────────────────────────────────────────
 
 const pollRideStatus = async () => {
   if (!rideStore.ride?._id || rideStore.ride.status !== 'pending') return
@@ -587,8 +600,8 @@ const newRide = () => { rideStore.clearRide(); router.push('/passenger/request')
   transition: transform 0.15s;
   z-index:    20;
 }
-.chat-fab   { bottom:60px; right:calc(var(--pr-px) + 12px); background:rgba(30,42,50,0.9); }
-.driver-fab { bottom:14px; right:calc(var(--pr-px) + 12px); background:rgba(0,212,184,0.2); }
+.chat-fab   { bottom:72px; right:calc(var(--pr-px) + 12px); background:rgba(30,42,50,0.9); }
+.driver-fab { bottom:26px; right:calc(var(--pr-px) + 12px); background:rgba(0,212,184,0.2); }
 .chat-fab:hover, .driver-fab:hover { transform:scale(1.08); }
 
 .chat-unread {

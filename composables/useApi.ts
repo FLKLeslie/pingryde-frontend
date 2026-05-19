@@ -1,86 +1,119 @@
 // composables/useApi.ts
-// ─────────────────────────────────────────────────────────────
-// Centralizes all HTTP calls to the Express backend.
-// Endpoint map (from server.js routes):
+// ─────────────────────────────────────────────────────────────────
+// HTTP API HELPERS — thin wrappers around $fetch
 //
-//   POST /api/users          → register passenger
-//   POST /api/drivers        → register driver
-//   GET  /api/rides/driver/:driverId  → driver notification panel
-//   POST /api/rides          → create ride request
+// CHANGE FROM BEFORE:
+//   Old: used useRuntimeConfig() → was undefined outside setup() context
+//   New: imports API_BASE directly from utils/api.js → always works
 //
-// NOTE: Your backend has NO login endpoint yet — registration
-// returns the full user/driver object. We store it directly.
-// A login route would be: POST /api/users/login (not yet built).
-// ─────────────────────────────────────────────────────────────
+// TO CHANGE THE BACKEND URL:
+//   Edit BACKEND_HOST in utils/api.js — that's the only place.
+//
+// NOTE: Most pages import API_BASE and call $fetch directly.
+//   Use this composable only when you want typed helper functions.
+// ─────────────────────────────────────────────────────────────────
+
+import { API_BASE } from '~/utils/api'
 
 export const useApi = () => {
-  const config = useRuntimeConfig()
-  const base   = config.public.apiBase  // http://localhost:5000/api
 
-  // ── Passenger (User) ───────────────────────────────────────
+  // ── Passenger (User) ───────────────────────────────────────────
 
-  // POST /api/users
+  // POST /api/users — register a new passenger
   // Body: { name, phone, password, email?, lat, lng }
-  // The backend auto-detects region from lat/lng via getRegionFromCoordinates()
-  // Returns: full User document from MongoDB
+  // Backend auto-detects region from lat/lng
   const registerPassenger = (body: {
     name: string; phone: string; password: string;
     email?: string; lat: number; lng: number;
-  }) => $fetch(`${base}/users`, { method: 'POST', body })
+  }) => $fetch(`${API_BASE}/users`, { method: 'POST', body })
 
-  // ── Driver ────────────────────────────────────────────────
+  // POST /api/users/login — login a passenger
+  const loginPassenger = (body: { phone: string; password: string }) =>
+    $fetch(`${API_BASE}/users/login`, { method: 'POST', body })
 
-  // POST /api/drivers
+  // ── Driver ────────────────────────────────────────────────────
+
+  // POST /api/drivers — register a new driver
   // Body: { name, phone, vehicleType, capabilities?, currentLocation: { lat, lng } }
-  // The backend auto-detects region from currentLocation.lat/lng
-  // Returns: full Driver document from MongoDB
   const registerDriver = (body: {
-    name: string; phone: string;
+    name: string; phone: string; password: string;
     vehicleType: 'taxi' | 'bike';
     capabilities?: string[];
     currentLocation: { lat: number; lng: number };
-  }) => $fetch(`${base}/drivers`, { method: 'POST', body })
+  }) => $fetch(`${API_BASE}/drivers`, { method: 'POST', body })
 
-  // GET /api/drivers/:id (not yet in your routes — placeholder)
-  const getDriver = (id: string) =>
-    $fetch(`${base}/drivers/${id}`)
+  // POST /api/drivers/login — login a driver
+  const loginDriver = (body: { phone: string; password: string }) =>
+    $fetch(`${API_BASE}/drivers/login`, { method: 'POST', body })
 
-  // ── Rides ─────────────────────────────────────────────────
+  // GET /api/drivers/:id
+  const getDriver = (id: string) => $fetch(`${API_BASE}/drivers/${id}`)
 
-  // POST /api/rides
-  // Body: { passengerId, rideCategory, rideType, pickup, destination?, region? }
-  // Returns: { message, ride, nearestDrivers }
-  // Also fires "newRide" socket event to nearby drivers
-  const createRide = (body: {
-    passengerId:   string
-    rideCategory:  'normal' | 'special'
-    rideType?:     'taxi' | 'bike'
-    pickup:        { lat: number; lng: number; description?: string }
-    destination?:  { lat: number; lng: number }
-    region?:       string
-    specialRequest?: { description?: string; cargoType?: string; estimatedLoad?: string }
-  }) => $fetch(`${base}/rides`, { method: 'POST', body })
-
-  // GET /api/rides/driver/:driverId
-  // Query params: region?, status?, fromDate?, toDate?
-  // Returns: { total, filters, rides[] }
-  const getDriverRides = (driverId: string, filters?: {
-    region?: string; status?: string; fromDate?: string; toDate?: string;
-  }) => {
-    const params = new URLSearchParams()
-    if (filters?.region)   params.set('region', filters.region)
-    if (filters?.status)   params.set('status', filters.status)
-    if (filters?.fromDate) params.set('fromDate', filters.fromDate)
-    if (filters?.toDate)   params.set('toDate', filters.toDate)
-    const qs = params.toString()
-    return $fetch(`${base}/rides/driver/${driverId}${qs ? '?' + qs : ''}`)
+  // GET /api/drivers/nearby?lat=&lng=&type=
+  const getNearbyDrivers = (lat: number, lng: number, type?: string) => {
+    const params = new URLSearchParams({ lat: String(lat), lng: String(lng) })
+    if (type && type !== 'all') params.set('type', type)
+    return $fetch(`${API_BASE}/drivers/nearby?${params}`)
   }
 
+  // ── Rides ──────────────────────────────────────────────────────
+
+  // POST /api/rides — create a ride and notify nearby drivers
+  const createRide = (body: {
+    passengerId:    string;
+    rideCategory:   'normal' | 'special';
+    rideType?:      'taxi' | 'bike';
+    pickup:         { lat: number; lng: number; description?: string };
+    destination:    { lat: number; lng: number; description?: string };
+    specialRequest?: { description?: string; cargoType?: string; estimatedLoad?: string };
+  }) => $fetch(`${API_BASE}/rides`, { method: 'POST', body })
+
+  // GET /api/rides/:id
+  const getRide = (id: string) => $fetch(`${API_BASE}/rides/${id}`)
+
+  // GET /api/rides/passenger/:passengerId — ride history
+  const getPassengerRides = (passengerId: string, status?: string) =>
+    $fetch(`${API_BASE}/rides/passenger/${passengerId}${status ? `?status=${status}` : ''}`)
+
+  // GET /api/rides/driver/:driverId — pending/filtered rides for driver
+  const getDriverRides = (driverId: string, filters?: {
+    status?: string; region?: string; fromDate?: string; toDate?: string;
+  }) => {
+    const params = new URLSearchParams()
+    if (filters?.status)   params.set('status',   filters.status)
+    if (filters?.region)   params.set('region',   filters.region)
+    if (filters?.fromDate) params.set('fromDate',  filters.fromDate)
+    if (filters?.toDate)   params.set('toDate',    filters.toDate)
+    return $fetch(`${API_BASE}/rides/driver/${driverId}?${params}`)
+  }
+
+  // PATCH /api/rides/:id/cancel
+  const cancelRide = (id: string, cancelledBy: 'passenger' | 'driver') =>
+    $fetch(`${API_BASE}/rides/${id}/cancel`, { method: 'PATCH', body: { cancelledBy } })
+
+  // POST /api/rides/:id/chat
+  const sendChat = (id: string, sender: 'passenger' | 'driver', text: string) =>
+    $fetch(`${API_BASE}/rides/${id}/chat`, { method: 'POST', body: { sender, text } })
+
+  // GET /api/rides/:id/chat
+  const getChat = (id: string) => $fetch(`${API_BASE}/rides/${id}/chat`)
+
+  // DELETE /api/rides/passenger/:passengerId/clear-history
+  const clearPassengerHistory = (passengerId: string) =>
+    $fetch(`${API_BASE}/rides/passenger/${passengerId}/clear-history`, { method: 'DELETE' })
+
+  // DELETE /api/rides/driver/:driverId/clear-history
+  const clearDriverHistory = (driverId: string) =>
+    $fetch(`${API_BASE}/rides/driver/${driverId}/clear-history`, { method: 'DELETE' })
+
   return {
-    registerPassenger,
-    registerDriver,
-    getDriver,
-    createRide,
-    getDriverRides,
+    registerPassenger, loginPassenger,
+    registerDriver,    loginDriver,    getDriver,
+    getNearbyDrivers,
+    createRide,        getRide,
+    getPassengerRides, getDriverRides,
+    cancelRide,
+    sendChat,          getChat,
+    clearPassengerHistory, clearDriverHistory,
   }
 }

@@ -14,9 +14,10 @@ export const useRideStore = defineStore('ride', {
     driverLocation:    null,
     assignedDriver:    null,
     pendingRequests:   [],
-    chatMessages:      [],      // in-ride chat messages [{ sender, text, sentAt }]
-    feedbackPending:   false,   // true when driver marked complete, waiting for passenger
-    expiredNotification: null,  // set when ride expires: { message }
+    chatMessages:      [],
+    chatReady:         false,   // flips true when ride accepted → tracking page loads chat
+    feedbackPending:   false,
+    expiredNotification: null,
   }),
 
   getters: {
@@ -41,6 +42,7 @@ export const useRideStore = defineStore('ride', {
     },
     setChatMessages(msgs) { this.chatMessages = msgs || [] },
     clearChat()           { this.chatMessages = [] },
+    setChatReady(val)     { this.chatReady = val },
 
     // Feedback / expiry notifications
     setFeedbackPending(val)       { this.feedbackPending = val },
@@ -63,7 +65,9 @@ export const useRideStore = defineStore('ride', {
       this.driverLocation    = null
       this.assignedDriver    = null
       this.chatMessages      = []
+      this.chatReady         = false
       this.feedbackPending   = false
+      this.expiredNotification = null
     },
   },
 })

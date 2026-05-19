@@ -1,30 +1,31 @@
 // utils/api.js
-//
 // ─────────────────────────────────────────────────────────────────
-// WHAT THIS FILE IS
-// ─────────────────────────────────────────────────────────────────
-// One place that stores your backend server URLs.
-// Every page imports from here — no useRuntimeConfig() needed.
+// SINGLE SOURCE OF TRUTH FOR BACKEND URLS
 //
-// WHY THIS APPROACH:
-// useRuntimeConfig() was returning undefined because Nuxt 3's
-// runtimeConfig system requires a full Nuxt context to work.
-// In some page/component situations (especially with ssr:false),
-// the context is not available when the value is read.
+// This is the ONLY place you ever need to change the backend address.
+// Every page, component, and composable imports from here.
 //
-// A plain JS export like this ALWAYS works — it's just a string.
+// HOW TO DEPLOY:
+//   • Development → leave as http://localhost:5000
+//   • Production  → change to https://your-live-server.com
 //
-// TO USE IN ANY PAGE:
-//   import { API_BASE } from '~/utils/api'
-//   const result = await $fetch(`${API_BASE}/users`, { ... })
+// Example:
+//   import { API_BASE, SOCKET_URL, BACKEND_URL } from '~/utils/api'
 //
-// WHEN YOU DEPLOY TO PRODUCTION:
-//   Change the values below to your live server address.
 // ─────────────────────────────────────────────────────────────────
 
-// Express backend URL — defined in your backend's server.js as PORT 5000
-export const API_BASE = 'http://localhost:5000/api'
+// ── Change this ONE value when you host the backend somewhere else ──
+const BACKEND_HOST = 'http://localhost:5000'
+// ───────────────────────────────────────────────────────────────────
 
-// Socket.io URL — root of the backend (no /api), because Socket.io
-// is attached to the HTTP server directly, not to an Express route
-export const SOCKET_URL = 'http://localhost:5000'
+// REST API base — all $fetch calls use this
+// Example: $fetch(`${API_BASE}/rides`)  → http://localhost:5000/api/rides
+export const API_BASE = `${BACKEND_HOST}/api`
+
+// Socket.io URL — no /api, because socket.io attaches to the HTTP server root
+// Example: io(SOCKET_URL)  → connects to http://localhost:5000
+export const SOCKET_URL = BACKEND_HOST
+
+// Raw backend host — used to build full image URLs from stored paths
+// Example: `${BACKEND_URL}/uploads/profiles/photo.jpg`
+export const BACKEND_URL = BACKEND_HOST

@@ -20,10 +20,21 @@
         <p class="text-xs" style="color: var(--pr-muted)">Welcome back,</p>
         <h2 class="text-xl font-bold">{{ firstName }}</h2>
       </div>
-      <button @click="$router.push('/driver/profile')"
-              class="pr-avatar pr-avatar-orange w-10 h-10 text-sm">
-        {{ userStore.initials }}
-      </button>
+      <div class="flex items-center gap-2">
+        <!-- Clear ride history button -->
+        <!-- <button
+          @click="clearHistory"
+          :disabled="clearing"
+          style="padding:7px 11px;border-radius:8px;border:1px solid rgba(255,71,71,0.3);background:rgba(255,71,71,0.08);color:var(--pr-red);font-size:11px;font-weight:600;cursor:pointer"
+          title="Clear completed/cancelled ride history"
+        >
+          🗑️
+        </button> -->
+        <button @click="$router.push('/driver/profile')"
+                class="pr-avatar pr-avatar-orange w-10 h-10 text-sm">
+          {{ userStore.initials }}
+        </button>
+      </div>
     </div>
 
     <div class="px-4 space-y-4 pb-4">
@@ -183,6 +194,7 @@ import { useUserStore }   from '~/store/user'
 import { useRideStore }   from '~/store/ride'
 import { useSocket }      from '~/composables/useSocket'
 import { useGeolocation } from '~/composables/useGeolocation'
+import { API_BASE }       from '~/utils/api'
 
 const router    = useRouter()
 const userStore = useUserStore()
@@ -260,7 +272,29 @@ const acceptRide = (req) => {
   // and emits "rideAccepted" back to this driver
   socketAccept(rideId, userStore._id)
   rideStore.removeRequest(rideId)
-  // Navigate to active ride map
   router.push('/driver/map')
+}
+
+// ── Clear ride history ─────────────────────────────────────────────
+// Deletes completed/cancelled/expired rides for this driver from the DB.
+// Pending and accepted rides are never deleted.
+const clearing = ref(false)
+const clearHistory = async () => {
+  if (!confirm('Clear all completed, cancelled and expired ride history?')) return
+  clearing.value = true
+  try {
+    await $fetch(`${API_BASE}/rides/driver/${userStore._id}/clear-history`, {
+      method: 'DELETE',
+    })
+    // Remove from local pending list too (already filtered but clean up)
+    rideStore.pendingRequests = rideStore.pendingRequests.filter(
+      r => !['completed','cancelled','expired'].includes(r.status)
+    )
+    alert('History cleared.')
+  } catch (err) {
+    console.error('Clear history error:', err)
+  } finally {
+    clearing.value = false
+  }
 }
 </script>

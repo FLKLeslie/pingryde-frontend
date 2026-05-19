@@ -1,19 +1,8 @@
-// composables/useSocket.js — Complete socket event handler
-//
-// EVENTS:
-//  BROWSER → SERVER:
-//    passengerOnline, driverOnline, joinRide,
-//    driverLocationUpdate, acceptRide, completeRide
-//
-//  SERVER → BROWSER:
-//    newRide, newRideBroadcast,
-//    driverLocation,
-//    rideAccepted, rideAcceptedPassenger,
-//    rideAlreadyTaken, rideCompleted,
-//    rideCancelled,    ← NEW: ride was cancelled
-//    rideExpired,      ← NEW: ride expired (no driver accepted in time)
-//    requestFeedback,  ← NEW: driver marked complete, ask passenger
-//    chatMessage,      ← NEW: in-ride chat message
+// composables/useSocket.js
+// ─────────────────────────────────────────────────────────────────
+// SOCKET.IO CLIENT — single shared connection for the whole app
+// Compatible with the current store/ride.js (single-ride store).
+// ─────────────────────────────────────────────────────────────────
 
 import { io }           from 'socket.io-client'
 import { useRideStore } from '~/store/ride'
@@ -21,6 +10,7 @@ import { useUserStore } from '~/store/user'
 import { SOCKET_URL }   from '~/utils/api'
 
 let socket = null
+let listenersRegistered = false
 
 export const useSocket = () => {
   const rideStore = useRideStore()
@@ -30,113 +20,111 @@ export const useSocket = () => {
     if (socket?.connected) return
 
     socket = io(SOCKET_URL, {
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionDelay: 1000,
+      transports: ['websocket'], reconnection: true, reconnectionDelay: 1000,
     })
 
-    socket.on('connect', () => console.log('[Socket] ✅ Connected:', socket.id))
-    socket.on('connect_error', (e) => console.error('[Socket] ❌ Failed:', e.message))
-    socket.on('disconnect', (r) => console.warn('[Socket] Disconnected:', r))
+    socket.on('connect',       () => console.log('[Socket] ✅ Connected:', socket.id))
+    socket.on('connect_error', (e) => console.error('[Socket] ❌', e.message))
+    socket.on('disconnect',    (r) => console.warn('[Socket] 🔌', r))
 
-    // ── Incoming ride (targeted) ─────────────────────────────────
+    if (listenersRegistered) return
+    listenersRegistered = true
+
+    // New ride — direct delivery to this driver's socketId
     socket.on('newRide', (data) => {
-      console.log('[Socket] 🚗 New ride (direct):', data.rideId)
+      if (userStore.role !== 'driver') return
       rideStore.addPendingRequest(data)
     })
 
-    // ── Incoming ride (broadcast fallback) ──────────────────────
-    // Every socket receives this; we self-filter by role + nearestDriverIds
+    // New ride — broadcast fallback (frontend filters by nearestDriverIds)
     socket.on('newRideBroadcast', (data) => {
       if (userStore.role !== 'driver') return
       const myId = userStore._id?.toString()
       if (!myId || !data.nearestDriverIds?.includes(myId)) return
-      console.log('[Socket] 📡 Broadcast ride (I match):', data.rideId)
       rideStore.addPendingRequest(data)
     })
 
-    // ── Driver's live GPS (received by passenger) ────────────────
-    socket.on('driverLocation', (coords) => {
-      rideStore.updateDriverLocation(coords)
+    // Driver GPS → update driver location in store (passenger sees this)
+    socket.on('driverLocation', ({ lat, lng }) => {
+      rideStore.updateDriverLocation({ lat, lng })
     })
 
-    // ── Ride accepted — driver side ──────────────────────────────
+    // Passenger GPS → update passenger location in store (driver sees this)
+    socket.on('passengerLocation', ({ lat, lng }) => {
+      rideStore.updatePassengerLocation({ lat, lng })
+    })
+
+    // Driver: their acceptance was confirmed by the server
     socket.on('rideAccepted', ({ ride, driver }) => {
-      console.log('[Socket] ✅ Driver: accepted:', ride?._id)
       rideStore.setRide(ride)
       rideStore.updateStatus('accepted')
+      // Join ride room immediately so location + chat events arrive
+      if (ride?._id) socket.emit('joinRide', { rideId: ride._id })
     })
 
-    // ── Ride accepted — passenger side (KEY FIX) ─────────────────
+    // Passenger: a driver accepted their ride
     socket.on('rideAcceptedPassenger', ({ ride, driver }) => {
-      console.log('[Socket] 🎉 Passenger: driver accepted:', driver?.name)
       rideStore.setRide(ride)
       rideStore.updateStatus('accepted')
       rideStore.setAssignedDriver(driver)
+      if (ride?._id) socket.emit('joinRide', { rideId: ride._id })
+      // Signal tracking page to load chat history
+      rideStore.setChatReady(true)
     })
 
-    // ── Another driver was faster ────────────────────────────────
-    socket.on('rideAlreadyTaken', () => {
-      rideStore.removeFirstPending()
-    })
+    socket.on('rideAlreadyTaken', () => rideStore.removeFirstPending())
 
-    // ── Ride completed (both parties notified) ───────────────────
     socket.on('rideCompleted', ({ rideId }) => {
       if (rideStore.ride?._id?.toString() === rideId?.toString()) {
         rideStore.updateStatus('completed')
       }
     })
 
-    // ── Ride cancelled ───────────────────────────────────────────
-    // Fired when either party cancels. Both receive this.
-    socket.on('rideCancelled', ({ rideId, cancelledBy }) => {
-      console.log('[Socket] ❌ Ride cancelled by', cancelledBy)
+    socket.on('rideCancelled', ({ rideId }) => {
       if (rideStore.ride?._id?.toString() === rideId?.toString()) {
         rideStore.updateStatus('cancelled')
       }
     })
 
-    // ── Ride expired (passenger only) ────────────────────────────
-    // Fired by server expiry cron when no driver accepted in time
     socket.on('rideExpired', ({ rideId, message }) => {
-      console.log('[Socket] ⏰ Ride expired:', rideId)
       if (rideStore.ride?._id?.toString() === rideId?.toString()) {
         rideStore.updateStatus('expired')
         rideStore.setExpiredNotification({ message })
       }
     })
 
-    // ── Feedback request (passenger only) ────────────────────────
-    // Driver marked complete; server asks passenger to confirm
-    socket.on('requestFeedback', ({ rideId, message }) => {
-      console.log('[Socket] ❓ Feedback requested for ride:', rideId)
+    socket.on('requestFeedback', ({ rideId }) => {
       if (rideStore.ride?._id?.toString() === rideId?.toString()) {
         rideStore.setFeedbackPending(true)
       }
     })
 
-    // ── In-ride chat message ──────────────────────────────────────
+    // Chat message — arrives for both passenger and driver
     socket.on('chatMessage', (msg) => {
-      console.log('[Socket] 💬 Chat from', msg.sender)
       rideStore.addChatMessage(msg)
     })
   }
 
-  const registerPassenger = (userId)  => socket?.emit('passengerOnline', userId)
-  const goOnline          = (driverId)=> socket?.emit('driverOnline', driverId)
-  const joinRide          = (rideId)  => socket?.emit('joinRide', { rideId })
-  const sendDriverLocation= (rideId, lat, lng) => socket?.emit('driverLocationUpdate', { rideId, lat, lng })
-  const acceptRide        = (rideId, driverId)  => socket?.emit('acceptRide', { rideId, driverId })
-  const completeRide      = (rideId)  => socket?.emit('completeRide', { rideId })
+  const registerPassenger     = (userId)          => socket?.emit('passengerOnline', userId)
+  const goOnline              = (driverId)        => socket?.emit('driverOnline', driverId)
+  const joinRide              = (rideId)          => socket?.emit('joinRide', { rideId })
+  const sendDriverLocation    = (rideId, lat, lng)=> socket?.emit('driverLocationUpdate', { rideId, lat, lng })
+  const sendPassengerLocation = (rideId, lat, lng)=> socket?.emit('passengerLocationUpdate', { rideId, lat, lng })
+  const acceptRide            = (rideId, driverId)=> socket?.emit('acceptRide', { rideId, driverId })
+  const completeRide          = (rideId)          => socket?.emit('completeRide', { rideId })
 
   const getSocketId = () => socket?.id ?? null
   const isConnected = () => socket?.connected ?? false
-  const disconnect  = () => { socket?.disconnect(); socket = null }
+  const disconnect  = () => {
+    listenersRegistered = false
+    socket?.disconnect()
+    socket = null
+  }
 
   return {
     connect, disconnect,
-    registerPassenger, goOnline,
-    joinRide, sendDriverLocation,
+    registerPassenger, goOnline, joinRide,
+    sendDriverLocation, sendPassengerLocation,
     acceptRide, completeRide,
     getSocketId, isConnected,
   }
