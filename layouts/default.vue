@@ -8,7 +8,8 @@
 
         <NuxtLink :to="userStore.isDriver ? '/driver/dashboard' : '/passenger/request'"
                   class="brand">
-          <div class="brand-icon">🚀</div>
+          <!-- <div class="brand-icon">🚀</div> -->
+          <div class="brand-icon"><img src="/logo.png" alt=""></div>
           <span class="brand-name">PingRyde</span>
         </NuxtLink>
 
