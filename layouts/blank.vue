@@ -23,7 +23,12 @@
             width:32px;height:32px;border-radius:9px;
             background:rgba(0,212,184,0.12);border:1px solid rgba(0,212,184,0.25);
             display:flex;align-items:center;justify-content:center;font-size:15px;
-          ">🚀</div>
+          "> 
+          
+          <div class="brand-icon"><img src="/logo2.png" alt=""></div>
+        
+        </div>
+          
           <span style="font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--pr-teal);">
             PingRyde
           </span>

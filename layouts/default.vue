@@ -9,7 +9,7 @@
         <NuxtLink :to="userStore.isDriver ? '/driver/dashboard' : '/passenger/request'"
                   class="brand">
           <!-- <div class="brand-icon">🚀</div> -->
-          <div class="brand-icon"><img src="/logo.png" alt=""></div>
+          <div class="brand-icon"><img src="/logo2.png" alt=""></div>
           <span class="brand-name">PingRyde</span>
         </NuxtLink>
 
@@ -53,7 +53,9 @@
     <footer class="site-footer">
       <div class="footer-inner">
         <div class="footer-brand">
-          <span style="font-size:16px">🚀</span>
+          <!-- <span style="font-size:16px">🚀</span> -->
+          <div class="brand-icon"><img src="/logo2.png" alt=""></div>
+
           <span class="footer-brand-name">PingRyde</span>
           <span style="color:var(--pr-muted)">—</span>
           <span class="footer-tagline">Real-time ride coordination · Cameroon 🇨🇲</span>
