@@ -59,7 +59,7 @@ How the passenger appears on the map:
       -->
       <div style="padding:0 16px 12px;">
         <PingMap
-          height="420px"
+          height="350px"
           role="driver"
           :passenger-coords="rideStore.passengerLocation"
           :driver-coords="myLocation"
