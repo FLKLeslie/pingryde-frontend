@@ -146,7 +146,13 @@ watch(editing, (v) => {
   }
 })
 
-const photoUrl = (path) => path ? `${BACKEND_URL}${path}` : null
+const photoUrl = (path) => {
+  // Cloudinary URLs are already full URLs, so return as-is
+  // Local paths start with "/" — prepend BACKEND_URL only for those
+  if (!path) return null
+  if (path.startsWith("http")) return path  // Already a full URL
+  return `${BACKEND_URL}${path}`             // Local path
+}
 
 // Handle photo file selection — show preview immediately, then upload
 const handlePhotoSelect = async (event) => {
@@ -156,7 +162,7 @@ const handlePhotoSelect = async (event) => {
   // Show preview immediately (good UX — user sees change right away)
   photoPreview.value = URL.createObjectURL(file)
 
-  // Upload to backend
+  // Upload to backend (which uploads to Cloudinary)
   uploading.value = true
   uploadSuccess.value = false
   try {
@@ -168,8 +174,8 @@ const handlePhotoSelect = async (event) => {
       body:   formData,
     })
 
-    // Update store with the new path
-    userStore.updateProfile({ profilePhoto: res.photoPath })
+    // Update store with the Cloudinary URL (res.photoUrl is a full URL)
+    userStore.updateProfile({ profilePhoto: res.photoUrl })
 
     uploadSuccess.value = true
     setTimeout(() => { uploadSuccess.value = false }, 3000)

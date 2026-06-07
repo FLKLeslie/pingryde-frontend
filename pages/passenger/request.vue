@@ -1,14 +1,4 @@
-<!-- pages/passenger/request.vue
-════════════════════════════════════════════════════════════════════
-PASSENGER — BOOK A RIDE
-
-Flow:
-  1. GPS captured silently on load → map shows nearby drivers immediately
-  2. Passenger picks category → picks vehicle → location fields appear
-  3. No vehicle pre-selected — user must choose
-  4. GPS coords sent to backend for driver proximity + map pins
-  5. Text fields (pickup/destination) are what the driver reads
-════════════════════════════════════════════════════════════════════ -->
+<!-- pages/passenger/request.vue — PASSENGER: BOOK A RIDE -->
 <template>
   <div class="pr-page">
 
@@ -25,29 +15,45 @@ Flow:
       <div v-else-if="!locating" class="drivers-badge drivers-badge--none">No drivers nearby</div>
     </div>
 
-    <!-- Map — always visible, shows all online drivers before booking -->
+    <!-- ══ MAP ══════════════════════════════════════════════════════
+      Shows nearby online drivers before booking.
+      When destinationMode is on, tapping the map sets the destination.
+    ════════════════════════════════════════════════════════════════ -->
     <div class="map-wrapper">
       <PingMap
         :style="{ height: mapHeight }"
         :passenger-coords="myLocation"
+        :passenger-label="townName"
         :nearby-drivers="nearbyDrivers"
         :show-nearby="true"
+        :destination-mode="destinationMode"
+        :destination-coords="destCoords"
         @driver-click="openDriverSheet"
+        @destination-picked="onDestinationPicked"
       />
+
+      <!-- GPS / town name pill -->
       <div class="map-gps-badge">
-        <span v-if="locating"       class="gps-pill gps-pill--loading">
+        <span v-if="locating" class="gps-pill gps-pill--loading">
           <span class="gps-dot gps-dot--yellow"></span>Getting location...
         </span>
         <span v-else-if="myLocation" class="gps-pill gps-pill--ready">
-          <span class="gps-dot gps-dot--teal"></span>{{ userStore.region || 'Location ready' }}
+          <span class="gps-dot gps-dot--teal"></span>
+          <!-- Show town name once reverse geocoding resolves, otherwise coords -->
+          {{ townName || `${myLocation.lat.toFixed(4)}, ${myLocation.lng.toFixed(4)}` }}
         </span>
         <span v-else class="gps-pill gps-pill--error">
           <span class="gps-dot gps-dot--red"></span>Location unavailable
         </span>
       </div>
+
+      <!-- Destination-mode cancel button -->
+      <button v-if="destinationMode" class="dest-mode-cancel" @click="destinationMode = false">
+        ✕ Cancel
+      </button>
     </div>
 
-    <!-- Legend -->
+    <!-- Map legend -->
     <div class="map-legend">
       <div class="leg"><div class="leg-dot" style="background:var(--pr-teal)"></div>You</div>
       <div class="leg"><div class="leg-dot" style="background:var(--pr-yellow);border-radius:2px"></div>Taxi</div>
@@ -55,7 +61,7 @@ Flow:
       <span class="leg-hint">Tap a pin for driver info</span>
     </div>
 
-    <!-- Form -->
+    <!-- ══ FORM ══════════════════════════════════════════════════════ -->
     <div class="form-wrap">
 
       <!-- STEP 1: Category -->
@@ -73,7 +79,7 @@ Flow:
         </div>
       </div>
 
-      <!-- STEP 2: Vehicle (normal rides) -->
+      <!-- STEP 2: Vehicle (normal) -->
       <Transition name="slide-down">
         <div v-if="form.rideCategory === 'normal'" class="form-section">
           <p class="form-label">Which vehicle?</p>
@@ -90,15 +96,13 @@ Flow:
         </div>
       </Transition>
 
-      <!-- STEP 2b: Special vehicle selection -->
+      <!-- STEP 2b: Vehicle (special) -->
       <Transition name="slide-down">
         <div v-if="form.rideCategory === 'special'" class="form-section">
           <p class="form-label">Which vehicle for transport?</p>
-          <p style="font-size:12px;color:var(--pr-muted);margin:0">
-            Your request will only go to drivers with that vehicle type.
-          </p>
+          <p class="form-sub">Your request will only go to that vehicle type.</p>
           <div class="card-grid">
-            <button v-for="veh in specialVehicles" :key="veh.value"
+            <button v-for="veh in vehicles" :key="veh.value"
                     class="choice-card" :class="{ 'choice-card--active': form.specialVehicleType === veh.value }"
                     :style="form.specialVehicleType === veh.value ? `border-color:${veh.color};background:${veh.bg}` : ''"
                     @click="form.specialVehicleType = veh.value">
@@ -110,35 +114,110 @@ Flow:
         </div>
       </Transition>
 
-      <!-- STEP 3: Location fields — appear once vehicle selected -->
+      <!-- STEP 3: Location fields -->
       <Transition name="slide-down">
         <div v-if="showLocationFields" class="form-section">
           <p class="form-label">Trip details</p>
+
+          <!-- ── PICKUP ────────────────────────────────────────────
+            Default: town name from reverse geocode, editable.
+            Autocomplete dropdown from Nominatim search.
+          ─────────────────────────────────────────────────────── -->
           <div class="loc-row">
             <div class="loc-pin loc-pin--pickup"></div>
             <div class="loc-field">
               <label class="loc-label">Pickup location</label>
-              <input v-model="form.pickupDescription" type="text" class="pr-input"
-                     placeholder="e.g. Near Total station, Molyko" maxlength="120" />
+              <div class="autocomplete-wrap">
+                <input
+                  v-model="form.pickupDescription"
+                  type="text"
+                  class="pr-input"
+                  placeholder="e.g. Near Total station, Molyko"
+                  maxlength="120"
+                  autocomplete="off"
+                  @input="onPickupInput"
+                  @focus="pickupFocused = true"
+                  @blur="hidePickupSuggestions"
+                />
+                <!-- Suggestions dropdown -->
+                <div v-if="pickupFocused && pickupSuggestions.length > 0" class="suggestions-dropdown">
+                  <button
+                    v-for="(s, i) in pickupSuggestions" :key="i"
+                    class="suggestion-item"
+                    @mousedown.prevent="selectPickupSuggestion(s)"
+                  >
+                    <span class="suggestion-icon">📍</span>
+                    <div>
+                      <p class="suggestion-name">{{ s.name }}</p>
+                      <p class="suggestion-full">{{ s.fullName }}</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
               <p v-if="myLocation" class="loc-gps">
                 📡 GPS: {{ myLocation.lat.toFixed(4) }}, {{ myLocation.lng.toFixed(4) }}
               </p>
               <p v-else class="loc-gps loc-gps--warn">⚠️ GPS not available — enable location</p>
             </div>
           </div>
+
           <div class="loc-line-wrap"><div class="loc-line"></div></div>
+
+          <!-- ── DESTINATION ────────────────────────────────────────
+            Three ways to set destination:
+              1. Type a description → autocomplete suggestions appear
+              2. Tap "Pick on map" → destinationMode activates → tap the map
+              3. Both are combined: picking on map also does reverse geocode
+                 to fill the text field automatically
+          ─────────────────────────────────────────────────────────── -->
           <div class="loc-row">
             <div class="loc-pin loc-pin--dest"></div>
             <div class="loc-field">
               <label class="loc-label">Destination</label>
-              <input v-model="form.destinationDescription" type="text" class="pr-input"
-                     placeholder="e.g. Buea Town market" maxlength="120" />
+              <div class="autocomplete-wrap">
+                <input
+                  v-model="form.destinationDescription"
+                  type="text"
+                  class="pr-input"
+                  placeholder="e.g. Buea Town market"
+                  maxlength="120"
+                  autocomplete="off"
+                  @input="onDestInput"
+                  @focus="destFocused = true"
+                  @blur="hideDestSuggestions"
+                />
+                <!-- Suggestions dropdown -->
+                <div v-if="destFocused && destSuggestions.length > 0" class="suggestions-dropdown">
+                  <button
+                    v-for="(s, i) in destSuggestions" :key="i"
+                    class="suggestion-item"
+                    @mousedown.prevent="selectDestSuggestion(s)"
+                  >
+                    <span class="suggestion-icon">🏁</span>
+                    <div>
+                      <p class="suggestion-name">{{ s.name }}</p>
+                      <p class="suggestion-full">{{ s.fullName }}</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Pick-on-map button -->
+              <button class="pick-on-map-btn" @click="startDestinationMode">
+                <span>🗺️</span>
+                {{ destCoords ? 'Change on map' : 'Pick on map' }}
+              </button>
+
+              <!-- Confirmation when user tapped the map -->
+              <p v-if="destCoords && !destinationMode" class="dest-confirmed">
+                ✓ Location pinned: {{ destCoords.lat.toFixed(4) }}, {{ destCoords.lng.toFixed(4) }}
+              </p>
             </div>
           </div>
         </div>
       </Transition>
 
-      <!-- STEP 3b: Special details -->
+      <!-- STEP 3b: Special cargo details -->
       <Transition name="slide-down">
         <div v-if="form.rideCategory === 'special' && showLocationFields" class="form-section">
           <p class="form-label">Cargo details</p>
@@ -184,7 +263,6 @@ Flow:
       <div v-if="selectedDriver" class="sheet-overlay" @click.self="selectedDriver = null">
         <div class="driver-sheet">
           <button class="sheet-close" @click="selectedDriver = null">✕</button>
-          <!-- Photo placeholder — 72×72 circle -->
           <div class="sheet-photo">
             <span class="sheet-initials">{{ selectedDriverInitials }}</span>
           </div>
@@ -221,7 +299,7 @@ Flow:
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter }      from 'vue-router'
 import { useUserStore }   from '~/store/user'
 import { useRideStore }   from '~/store/ride'
@@ -231,36 +309,51 @@ import { API_BASE }       from '~/utils/api'
 const router    = useRouter()
 const userStore = useUserStore()
 const rideStore = useRideStore()
-const { getOnce } = useGeolocation()
+const { getOnce, reverseGeocode, searchPlaces } = useGeolocation()
 
-const myLocation     = ref(null)
-const nearbyDrivers  = ref([])
-const locating       = ref(true)
-const loading        = ref(false)
-const errorMsg       = ref('')
-const selectedDriver = ref(null)
-let nearbyInterval   = null
+// ── State ──────────────────────────────────────────────────────────
+const myLocation      = ref(null)    // { lat, lng } from device GPS
+const townName        = ref('')      // reverse-geocoded place name e.g. "Molyko, Buea"
+const nearbyDrivers   = ref([])
+const locating        = ref(true)
+const loading         = ref(false)
+const errorMsg        = ref('')
+const selectedDriver  = ref(null)
 
+// Destination map-picking state
+const destinationMode = ref(false)   // true = map click sets destination
+const destCoords      = ref(null)    // { lat, lng } picked on map
+
+// Autocomplete state
+const pickupSuggestions  = ref([])
+const destSuggestions    = ref([])
+const pickupFocused      = ref(false)
+const destFocused        = ref(false)
+let pickupDebounce       = null
+let destDebounce         = null
+
+let nearbyInterval = null
+
+// ── Computed ───────────────────────────────────────────────────────
 const firstName = computed(() => userStore.name?.split(' ')[0] || 'there')
 const selectedDriverInitials = computed(() =>
-  (selectedDriver.value?.name || '??').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)
+  (selectedDriver.value?.name || '??').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 )
 const mapHeight = computed(() => {
   if (typeof window === 'undefined') return '260px'
   return window.innerWidth >= 640 ? '300px' : '240px'
 })
+const showLocationFields = computed(() =>
+  (form.rideCategory === 'normal'  && form.rideType !== '') ||
+  (form.rideCategory === 'special' && form.specialVehicleType !== '')
+)
 
+// ── Form ───────────────────────────────────────────────────────────
 const form = reactive({
   rideCategory: '', rideType: '', specialVehicleType: '',
   pickupDescription: '', destinationDescription: '',
   specialRequest: { description: '', cargoType: '', estimatedLoad: '' },
 })
-
-// Location fields appear once a vehicle is chosen (or special with vehicle)
-const showLocationFields = computed(() =>
-  form.rideCategory === 'normal'  && form.rideType !== '' ||
-  form.rideCategory === 'special' && form.specialVehicleType !== ''
-)
 
 const categories = [
   { value:'normal',  label:'Normal',  sub:'Passenger ride', icon:'🚗', color:'var(--pr-teal)',   bg:'rgba(0,212,184,0.1)' },
@@ -270,49 +363,134 @@ const vehicles = [
   { value:'bike', label:'Motorbike', sub:'Exact pickup',  icon:'🏍️', color:'var(--pr-orange)', bg:'rgba(255,107,53,0.1)' },
   { value:'taxi', label:'Taxi',      sub:'At checkpoint', icon:'🚕', color:'var(--pr-teal)',   bg:'rgba(0,212,184,0.1)' },
 ]
-// Special rides use the same two vehicles as normal rides.
-// The vehicle chosen determines WHICH drivers get the request —
-// bike requests go only to bike drivers, taxi only to taxi drivers.
-const specialVehicles = [
-  { value:'bike', label:'Motorbike', sub:'Exact pickup',  icon:'🏍️', color:'var(--pr-orange)', bg:'rgba(255,107,53,0.1)' },
-  { value:'taxi', label:'Taxi',      sub:'At checkpoint', icon:'🚕', color:'var(--pr-teal)',   bg:'rgba(0,212,184,0.1)' },
-]
 
-const selectCategory = (cat) => { form.rideCategory = cat; form.rideType = ''; form.specialVehicleType = '' }
+const selectCategory = (cat) => {
+  form.rideCategory = cat
+  form.rideType = ''
+  form.specialVehicleType = ''
+}
 const openDriverSheet = (driver) => { selectedDriver.value = driver }
 const quickSelect = (vehicleType) => {
-  form.rideCategory = 'normal'; form.rideType = vehicleType; selectedDriver.value = null
+  form.rideCategory = 'normal'
+  form.rideType = vehicleType
+  selectedDriver.value = null
 }
 
+// ── Destination map-picking ────────────────────────────────────────
+const startDestinationMode = () => { destinationMode.value = true }
+
+// Called when PingMap emits 'destination-picked'
+const onDestinationPicked = async ({ lat, lng }) => {
+  destCoords.value      = { lat, lng }
+  destinationMode.value = false
+  // Reverse geocode the picked point to fill the text field
+  const name = await reverseGeocode(lat, lng)
+  if (name) form.destinationDescription = name
+}
+
+// ── Autocomplete: pickup field ─────────────────────────────────────
+const onPickupInput = () => {
+  clearTimeout(pickupDebounce)
+  if (!myLocation.value || form.pickupDescription.length < 2) {
+    pickupSuggestions.value = []
+    return
+  }
+  pickupDebounce = setTimeout(async () => {
+    pickupSuggestions.value = await searchPlaces(
+      form.pickupDescription,
+      myLocation.value.lat,
+      myLocation.value.lng
+    )
+  }, 500)
+}
+
+const selectPickupSuggestion = (s) => {
+  form.pickupDescription  = s.fullName
+  pickupSuggestions.value = []
+  pickupFocused.value     = false
+  // Update pickup GPS to the chosen suggestion's coords
+  myLocation.value = { lat: s.lat, lng: s.lng }
+}
+
+const hidePickupSuggestions = () => {
+  setTimeout(() => { pickupFocused.value = false }, 200)
+}
+
+// ── Autocomplete: destination field ───────────────────────────────
+const onDestInput = () => {
+  clearTimeout(destDebounce)
+  if (!myLocation.value || form.destinationDescription.length < 2) {
+    destSuggestions.value = []
+    return
+  }
+  destDebounce = setTimeout(async () => {
+    destSuggestions.value = await searchPlaces(
+      form.destinationDescription,
+      myLocation.value.lat,
+      myLocation.value.lng
+    )
+  }, 500)
+}
+
+const selectDestSuggestion = (s) => {
+  form.destinationDescription = s.fullName
+  destSuggestions.value       = []
+  destFocused.value           = false
+  // Store the destination coords from the suggestion
+  destCoords.value = { lat: s.lat, lng: s.lng }
+}
+
+const hideDestSuggestions = () => {
+  setTimeout(() => { destFocused.value = false }, 200)
+}
+
+// ── Nearby drivers fetch ───────────────────────────────────────────
 const fetchNearby = async () => {
   if (!myLocation.value) return
   try {
-    // URL built manually — $fetch params option can silently fail in Nuxt
     const { lat, lng } = myLocation.value
     const data = await $fetch(`${API_BASE}/drivers/nearby?lat=${lat}&lng=${lng}`)
     nearbyDrivers.value = Array.isArray(data) ? data : (data.drivers || [])
   } catch (e) { console.warn('[Request] fetchNearby:', e.message) }
 }
 
+// ── Mount ──────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    myLocation.value = await getOnce()
-    rideStore.updatePassengerLocation(myLocation.value)
+    const coords = await getOnce()
+    myLocation.value = coords
+    rideStore.updatePassengerLocation(coords)
+
+    // Reverse geocode to get the town name for the GPS pill + pickup default
+    const name = await reverseGeocode(coords.lat, coords.lng)
+    if (name) {
+      townName.value             = name
+      // Pre-fill pickup with the town name so user doesn't have to type
+      form.pickupDescription     = name
+    }
+
     await fetchNearby()
     nearbyInterval = setInterval(fetchNearby, 30_000)
   } catch {
     errorMsg.value = 'Could not get location. Enable GPS and refresh.'
-  } finally { locating.value = false }
+  } finally {
+    locating.value = false
+  }
 })
 
-onBeforeUnmount(() => { if (nearbyInterval) clearInterval(nearbyInterval) })
+onBeforeUnmount(() => {
+  if (nearbyInterval) clearInterval(nearbyInterval)
+  clearTimeout(pickupDebounce)
+  clearTimeout(destDebounce)
+})
 
+// ── Submit ─────────────────────────────────────────────────────────
 const requestRide = async () => {
   errorMsg.value = ''
-  if (!myLocation.value)                  { errorMsg.value = 'GPS not available.'; return }
-  if (!form.pickupDescription.trim())     { errorMsg.value = 'Please describe your pickup location.'; return }
-  if (!form.destinationDescription.trim()){ errorMsg.value = 'Please enter your destination.'; return }
-  if (!userStore._id)                     { errorMsg.value = 'You are not logged in.'; return }
+  if (!myLocation.value)                   { errorMsg.value = 'GPS not available.'; return }
+  if (!form.pickupDescription.trim())      { errorMsg.value = 'Please describe your pickup location.'; return }
+  if (!form.destinationDescription.trim()) { errorMsg.value = 'Please enter your destination.'; return }
+  if (!userStore._id)                      { errorMsg.value = 'You are not logged in.'; return }
 
   loading.value = true
   try {
@@ -325,10 +503,15 @@ const requestRide = async () => {
           ? form.rideType
           : form.specialVehicleType || undefined,
         pickup: {
-          lat: myLocation.value.lat, lng: myLocation.value.lng,
+          lat:         myLocation.value.lat,
+          lng:         myLocation.value.lng,
           description: form.pickupDescription.trim(),
         },
-        destination: { lat:0, lng:0, description: form.destinationDescription.trim() },
+        destination: {
+          lat:         destCoords.value?.lat || 0,
+          lng:         destCoords.value?.lng || 0,
+          description: form.destinationDescription.trim(),
+        },
         ...(form.rideCategory === 'special' ? { specialRequest: form.specialRequest } : {}),
       },
     })
@@ -337,7 +520,9 @@ const requestRide = async () => {
     router.push('/passenger/tracking')
   } catch (err) {
     errorMsg.value = err?.data?.error || 'Failed to create ride. Check backend is running.'
-  } finally { loading.value = false }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -345,9 +530,11 @@ const requestRide = async () => {
 .page-header {
   display:flex; align-items:center; justify-content:space-between;
   margin-bottom:16px; flex-wrap:wrap; gap:10px;
+  /* Ensure header never overflows on small screens */
+  min-width:0;
 }
 .greeting   { font-size:12px; color:var(--pr-muted); margin:0 0 2px; }
-.page-title { font-size:22px; font-weight:800; margin:0; }
+.page-title { font-size:clamp(18px, 5vw, 22px); font-weight:800; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .drivers-badge {
   display:flex; align-items:center; gap:7px; padding:6px 13px; border-radius:999px;
   font-size:12px; font-weight:600; color:var(--pr-orange);
@@ -360,11 +547,13 @@ const requestRide = async () => {
 }
 @keyframes pulsate { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.5)} }
 
-.map-wrapper  { position:relative; margin-bottom:10px; }
-.map-gps-badge{ position:absolute; top:12px; left:12px; z-index:20; }
+/* Map */
+.map-wrapper   { position:relative; margin-bottom:10px; }
+.map-gps-badge { position:absolute; top:12px; left:12px; z-index:20; }
 .gps-pill {
   display:inline-flex; align-items:center; gap:6px; padding:5px 11px;
   border-radius:999px; font-size:12px; font-weight:500; backdrop-filter:blur(8px);
+  max-width: 200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .gps-pill--loading { background:rgba(30,42,50,0.9); border:1px solid var(--pr-border); color:var(--pr-muted); }
 .gps-pill--ready   { background:rgba(0,212,184,0.14); border:1px solid rgba(0,212,184,0.35); color:var(--pr-teal); }
@@ -374,6 +563,15 @@ const requestRide = async () => {
 .gps-dot--teal   { background:var(--pr-teal); }
 .gps-dot--red    { background:var(--pr-red); }
 
+/* Cancel button shown in destination-picking mode */
+.dest-mode-cancel {
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%); z-index:30;
+  padding:8px 20px; border-radius:20px;
+  background:rgba(30,42,50,0.92); border:1px solid rgba(255,71,71,0.4);
+  color:var(--pr-red); font-size:13px; font-weight:600; cursor:pointer;
+  backdrop-filter:blur(8px); white-space:nowrap;
+}
+
 .map-legend {
   display:flex; align-items:center; gap:12px; margin-bottom:18px;
   flex-wrap:wrap; font-size:11px; color:var(--pr-muted);
@@ -382,9 +580,11 @@ const requestRide = async () => {
 .leg-dot { width:10px; height:10px; border-radius:50%; }
 .leg-hint { margin-left:auto; font-style:italic; }
 
+/* Form */
 .form-wrap    { display:flex; flex-direction:column; gap:16px; }
 .form-section { display:flex; flex-direction:column; gap:10px; }
 .form-label   { font-size:13px; font-weight:700; color:var(--pr-text); margin:0; }
+.form-sub     { font-size:12px; color:var(--pr-muted); margin:0; }
 
 .card-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .choice-card {
@@ -399,8 +599,9 @@ const requestRide = async () => {
 .choice-name { font-size:13px; font-weight:700; margin:0; }
 .choice-sub  { font-size:11px; color:var(--pr-muted); text-align:center; }
 
-.loc-row { display:flex; align-items:flex-start; gap:12px; }
-.loc-pin { width:14px; flex-shrink:0; margin-top:28px; display:flex; align-items:center; justify-content:center; }
+/* Location rows */
+.loc-row  { display:flex; align-items:flex-start; gap:12px; }
+.loc-pin  { width:14px; flex-shrink:0; margin-top:28px; display:flex; align-items:center; justify-content:center; }
 .loc-pin::before { content:''; display:block; width:12px; height:12px; border-radius:50%; }
 .loc-pin--pickup::before { background:var(--pr-teal);   box-shadow:0 0 0 3px rgba(0,212,184,0.2); }
 .loc-pin--dest::before   { background:var(--pr-orange); box-shadow:0 0 0 3px rgba(255,107,53,0.2); border-radius:3px; }
@@ -410,6 +611,40 @@ const requestRide = async () => {
 .loc-gps--warn { color:var(--pr-yellow); }
 .loc-line-wrap { padding-left:6px; padding-top:2px; padding-bottom:2px; }
 .loc-line { width:2px; height:14px; background:linear-gradient(to bottom,var(--pr-teal),var(--pr-orange)); opacity:0.45; border-radius:1px; }
+
+/* Autocomplete */
+.autocomplete-wrap { position:relative; }
+.suggestions-dropdown {
+  position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:100;
+  background:var(--pr-surface); border:1px solid var(--pr-border);
+  border-radius:10px; overflow:hidden;
+  box-shadow:0 8px 24px rgba(0,0,0,0.3);
+  max-height:220px; overflow-y:auto;
+}
+.suggestion-item {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:10px 14px; width:100%; border:none; background:transparent;
+  cursor:pointer; text-align:left; transition:background 0.12s;
+}
+.suggestion-item:hover { background:var(--pr-surface2); }
+.suggestion-item:not(:last-child) { border-bottom:1px solid var(--pr-border); }
+.suggestion-icon { font-size:14px; flex-shrink:0; margin-top:1px; }
+.suggestion-name { font-size:13px; font-weight:600; color:var(--pr-text); margin:0 0 1px; }
+.suggestion-full { font-size:11px; color:var(--pr-muted); margin:0; }
+
+/* Pick-on-map button */
+.pick-on-map-btn {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 12px; border-radius:8px; margin-top:4px;
+  background:var(--pr-surface2); border:1px solid var(--pr-border);
+  color:var(--pr-text); font-size:12px; font-weight:600; cursor:pointer;
+  transition:background 0.15s, border-color 0.15s;
+}
+.pick-on-map-btn:hover { background:rgba(255,107,53,0.1); border-color:rgba(255,107,53,0.35); }
+
+.dest-confirmed {
+  font-size:11px; color:var(--pr-teal); margin:4px 0 0; font-weight:600;
+}
 
 .advice-box {
   display:flex; align-items:flex-start; gap:10px; padding:11px 14px; border-radius:10px;
@@ -428,6 +663,7 @@ const requestRide = async () => {
 .slide-down-enter-from   { opacity:0; transform:translateY(-10px); }
 .slide-down-leave-to     { opacity:0; transform:translateY(-6px); }
 
+/* Driver sheet */
 .sheet-overlay {
   position:fixed; inset:0; z-index:500;
   background:rgba(0,0,0,0.55); backdrop-filter:blur(3px);
@@ -443,7 +679,6 @@ const requestRide = async () => {
   background:var(--pr-surface2); border:none; color:var(--pr-muted);
   font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;
 }
-/* Photo placeholder — 72×72 circle, ready for real photo */
 .sheet-photo {
   width:72px; height:72px; border-radius:50%; overflow:hidden;
   background:rgba(255,107,53,0.15); border:2px solid rgba(255,107,53,0.3);
@@ -453,11 +688,10 @@ const requestRide = async () => {
 .sheet-name { font-size:19px; font-weight:800; margin:0 0 4px; }
 .sheet-sub  { font-size:13px; color:var(--pr-muted); margin:0 0 14px; }
 .sheet-info { background:var(--pr-surface2); border-radius:10px; padding:10px 14px; margin-bottom:14px; text-align:left; }
-.sheet-row { display:flex; align-items:center; justify-content:space-between; padding:5px 0; }
+.sheet-row  { display:flex; align-items:center; justify-content:space-between; padding:5px 0; }
 .sheet-row:not(:last-child) { border-bottom:1px solid var(--pr-border); }
-.sheet-key { font-size:12px; color:var(--pr-muted); }
-.sheet-val { font-size:13px; font-weight:600; }
-
+.sheet-key  { font-size:12px; color:var(--pr-muted); }
+.sheet-val  { font-size:13px; font-weight:600; }
 .sheet-enter-active,.sheet-leave-active { transition:all 0.26s ease; }
 .sheet-enter-from,.sheet-leave-to { opacity:0; }
 .sheet-enter-from .driver-sheet,.sheet-leave-to .driver-sheet { transform:translateY(100%); }

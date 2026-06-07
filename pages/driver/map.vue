@@ -50,18 +50,22 @@ How the passenger appears on the map:
 
       <!--
         PingMap with role="driver":
-          • Centres on the driver's own GPS (driverCoords)
+          • Centres on the driver's own GPS (driverCoords = myLocation)
           • Teal pin = passenger (rideStore.passengerLocation — updated by socket)
           • Vehicle pin = driver (myLocation — updated by device GPS)
-          • Auto-pans to keep driver centred
+          • Dashed line between driver and passenger showing path
+          • ETA banner showing estimated time to reach passenger
+          • Location pill showing driver's own reverse-geocoded position
       -->
       <div style="padding:0 16px 12px;">
         <PingMap
-          height="340px"
+          height="420px"
           role="driver"
           :passenger-coords="rideStore.passengerLocation"
           :driver-coords="myLocation"
           :driver-type="rideStore.ride.rideType || 'bike'"
+          :location-label="myLocationLabel"
+          :show-eta="rideStore.ride.status === 'accepted'"
         />
       </div>
 
@@ -163,13 +167,14 @@ const rideStore = useRideStore()
 const userStore = useUserStore()
 
 // MUST destructure connect + goOnline — they are called before joinRide
-const { connect, goOnline, joinRide, sendDriverLocation, completeRide } = useSocket()
-const { startWatching, stopWatching } = useGeolocation()
+const { connect, goOnline, joinRide, sendDriverLocation, completeRide, emitProximityCheck } = useSocket()
+const { startWatching, stopWatching, reverseGeocode } = useGeolocation()
 
-const myLocation = ref(null)
-const chatOpen   = ref(false)
-const chatText   = ref('')
-const chatEl     = ref(null)
+const myLocation      = ref(null)   // driver's own GPS
+const myLocationLabel = ref('')     // reverse-geocoded name for the GPS pill
+const chatOpen        = ref(false)
+const chatText        = ref('')
+const chatEl          = ref(null)
 
 const passengerName = computed(() => {
   const p = rideStore.ride?.passengerId
@@ -208,10 +213,31 @@ onMounted(async () => {
   if (userStore._id) goOnline(userStore._id)
   // Step 3 — join the ride room
   joinRide(rideStore.ride._id)
-  // Step 4 — stream driver GPS
-  startWatching((coords) => {
+  // Step 4 — stream driver GPS + proximity check + reverse geocode
+  startWatching(async (coords) => {
     myLocation.value = coords
-    if (rideStore.ride?._id) sendDriverLocation(rideStore.ride._id, coords.lat, coords.lng)
+    if (!rideStore.ride?._id) return
+
+    // Send driver GPS to passenger's tracking map
+    sendDriverLocation(rideStore.ride._id, coords.lat, coords.lng)
+
+    // Check if driver and passenger are within 2 metres of each other.
+    // Server fires 'partyArrived' when they meet.
+    if (rideStore.ride.status === 'accepted' && rideStore.passengerLocation) {
+      emitProximityCheck({
+        rideId:       rideStore.ride._id,
+        driverLat:    coords.lat,
+        driverLng:    coords.lng,
+        passengerLat: rideStore.passengerLocation.lat,
+        passengerLng: rideStore.passengerLocation.lng,
+      })
+    }
+
+    // Reverse geocode driver's own position once for the map location pill
+    if (!myLocationLabel.value) {
+      const name = await reverseGeocode(coords.lat, coords.lng)
+      if (name) myLocationLabel.value = name
+    }
   })
   // Step 5 — load existing chat
   try {

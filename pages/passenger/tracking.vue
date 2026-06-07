@@ -24,15 +24,22 @@
 
     <!-- ── Map ─────────────────────────────────────────────────── -->
     <!--
-      FIXED: was <PingMap> — now correctly <PingMap>
-      MapView is at components/MapView.vue → named "MapView" by Nuxt
+      PingMap shows:
+        • Teal pin = passenger (you)
+        • Vehicle pin = driver (moves in real-time via socket)
+        • Dashed orange line = straight-line route between you and driver
+        • ETA banner = estimated minutes until you meet
+        • Location pill (centre-top) = your reverse-geocoded location name
     -->
     <div class="track-map-wrap">
       <PingMap
         :height="mapHeight"
         :passenger-coords="rideStore.passengerLocation"
+        :passenger-label="townName"
         :driver-coords="rideStore.driverLocation"
         :driver-type="rideStore.ride?.rideType || 'bike'"
+        :location-label="townName"
+        :show-eta="rideStore.ride?.status === 'accepted'"
       />
 
       <!-- Chat FAB button — visible when ride is accepted/ongoing -->
@@ -150,7 +157,37 @@
         </div>
       </Transition>
 
-      <!-- FEEDBACK REQUEST — driver marked complete, waiting for passenger -->
+      <!-- ARRIVED — driver and passenger within 2 metres -->
+      <Transition name="pr-fade-up">
+        <div v-if="arrivedNotification" class="status-card status-card--arrived pr-animate-in">
+          <div class="status-icon">🤝</div>
+          <div class="status-text">
+            <p class="status-title">Your driver is here!</p>
+            <p class="status-desc">
+              You and your driver are in the same spot. The ride is now ongoing.
+              Either of you can mark it complete when you arrive at your destination.
+            </p>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- PENDING FEEDBACK — ride timed out without being marked complete -->
+      <Transition name="pr-fade-up">
+        <div v-if="rideStore.ride?.status === 'pendingFeedback'" class="status-card status-card--feedback pr-animate-in">
+          <p class="status-title">⏳ Was this ride completed?</p>
+          <p class="status-desc">The ride has been ongoing for a while. Please confirm whether you arrived safely.</p>
+          <div class="feedback-buttons">
+            <button @click="confirmRide" class="pr-btn pr-btn-primary pr-btn-inline">
+              ✅ Yes, arrived safely
+            </button>
+            <button @click="cancelFromFeedback" class="pr-btn pr-btn-danger pr-btn-inline">
+              ❌ No, something went wrong
+            </button>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- FEEDBACK REQUEST — driver marked complete -->
       <Transition name="pr-fade-up">
         <div v-if="rideStore.feedbackPending" class="status-card status-card--feedback pr-animate-in">
           <p class="status-title">Did you arrive safely?</p>
@@ -311,17 +348,21 @@ import { API_BASE, BACKEND_URL } from '~/utils/api'
 const router    = useRouter()
 const rideStore = useRideStore()
 const userStore = useUserStore()
-const { connect, registerPassenger, joinRide, sendPassengerLocation } = useSocket()
-const { startWatching, stopWatching }           = useGeolocation()
+const { connect, registerPassenger, joinRide, sendPassengerLocation, emitProximityCheck } = useSocket()
+const { startWatching, stopWatching, reverseGeocode } = useGeolocation()
 
 // UI state
-const driverModalOpen = ref(false)
-const chatOpen        = ref(false)
-const chatText        = ref('')
-const chatEl          = ref(null)       // ref to chat message list div
+const driverModalOpen     = ref(false)
+const chatOpen            = ref(false)
+const chatText            = ref('')
+const chatEl              = ref(null)
+const townName            = ref('')
+// arrivedNotification: true when server confirmed <2m proximity.
+// Driven from the store so it persists if the component re-renders.
+const arrivedNotification = computed(() => !!rideStore.arrivedMessage)
 let pollInterval    = null
 let waitingInterval = null
-let expirySeconds   = ref(600)  // 10 minutes countdown
+let expirySeconds   = ref(600)
 
 // Computed
 const driverInitials = computed(() => {
@@ -331,17 +372,20 @@ const driverInitials = computed(() => {
 
 const statusColor = computed(() => ({
   pending:'pending', accepted:'active', ongoing:'active',
+  pendingFeedback:'pending',
   completed:'active', cancelled:'inactive', expired:'inactive',
 }[rideStore.ride?.status] || 'pending'))
 
 const statusLabel = computed(() => ({
   pending:'Searching...', accepted:'Driver En Route', ongoing:'Ongoing',
+  pendingFeedback:'Confirm Ride',
   completed:'Completed', cancelled:'Cancelled', expired:'Expired',
 }[rideStore.ride?.status] || 'Pending'))
 
 const mapHeight = computed(() => {
-  if (typeof window === 'undefined') return '300px'
-  return window.innerWidth >= 768 ? '380px' : '300px'
+  if (typeof window === 'undefined') return '360px'
+  // Taller map on wider screens for better visibility during tracking
+  return window.innerWidth >= 768 ? '440px' : '360px'
 })
 
 // Unread chat messages (from driver, not yet viewed)
@@ -356,33 +400,54 @@ const expiryCountdown = computed(() => {
   return `${m}:${s.toString().padStart(2,'0')}`
 })
 
-// Build full image URL from stored path
-const photoUrl = (path) => path ? `${BACKEND_URL}${path}` : null
-
-// Format chat timestamp
-const formatTime = (sentAt) => {
-  if (!sentAt) return ''
-  return new Date(sentAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+const photoUrl  = (path) => {
+  // Cloudinary URLs are already full URLs, so return as-is
+  // Local paths start with "/" — prepend BACKEND_URL only for those
+  if (!path) return null
+  if (path.startsWith("http")) return path  // Already a full URL
+  return `${BACKEND_URL}${path}`             // Local path
 }
+const formatTime= (sentAt) => sentAt
+  ? new Date(sentAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+  : ''
 
 // ── Lifecycle ──────────────────────────────────────────────────────
 onMounted(async () => {
   if (!rideStore.ride) { router.push('/passenger/request'); return }
 
   connect()
-
   if (userStore._id) registerPassenger(userStore._id)
   joinRide(rideStore.ride._id)
 
-  // Stream our GPS to both the store (for local map) AND the driver via socket
-  startWatching((coords) => {
+  // Stream passenger GPS to driver AND emit proximity check each update.
+  // The server's checkProximity handler compares both coords and fires
+  // 'partyArrived' when the distance drops below 2 metres.
+  startWatching(async (coords) => {
     rideStore.updatePassengerLocation(coords)
-    if (rideStore.ride?._id) {
-      sendPassengerLocation(rideStore.ride._id, coords.lat, coords.lng)
+    if (!rideStore.ride?._id) return
+
+    // Send passenger GPS to driver's map
+    sendPassengerLocation(rideStore.ride._id, coords.lat, coords.lng)
+
+    // Check proximity if ride is accepted and driver location is known
+    if (rideStore.ride.status === 'accepted' && rideStore.driverLocation) {
+      emitProximityCheck({
+        rideId:       rideStore.ride._id,
+        passengerLat: coords.lat,
+        passengerLng: coords.lng,
+        driverLat:    rideStore.driverLocation.lat,
+        driverLng:    rideStore.driverLocation.lng,
+      })
+    }
+
+    // Reverse geocode once to get a human-readable location name
+    if (!townName.value) {
+      const name = await reverseGeocode(coords.lat, coords.lng)
+      if (name) townName.value = name
     }
   })
 
-  // Expiry countdown
+  // Expiry countdown (only relevant while ride is pending)
   if (rideStore.ride.expiresAt) {
     const updateCountdown = () => {
       const remaining = Math.max(0, Math.floor((new Date(rideStore.ride.expiresAt) - Date.now()) / 1000))
@@ -392,10 +457,11 @@ onMounted(async () => {
     waitingInterval = setInterval(updateCountdown, 1000)
   }
 
-  // Polling backup (every 8s — fallback for missed socket events)
+  // Polling backup — re-fetches ride status every 8s in case a socket
+  // event was missed (e.g. due to a brief network interruption)
   pollInterval = setInterval(pollRideStatus, 8000)
 
-  // Load existing chat if ride is already accepted
+  // If the ride was already accepted before this page loaded, fetch chat history
   if (rideStore.ride.status === 'accepted') {
     await loadChat()
   }

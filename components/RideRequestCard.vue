@@ -17,15 +17,12 @@ labelled "Passenger" and the map centres on their location.
     <!-- Top: passenger info + badge -->
     <div class="rrc-top">
       <div class="rrc-passenger">
-        <!-- Photo placeholder — replace <span> with <img> when photos are ready -->
+        <!-- Photo or initials -->
         <div class="rrc-avatar">
-          <span class="rrc-initials">{{ passengerInitials }}</span>
-          <!--
-            FUTURE PHOTO:
-            <img v-if="passengerPhoto"
-                 :src="`${BACKEND_URL}${passengerPhoto}`"
-                 class="rrc-avatar-img" />
-          -->
+          <img v-if="passengerPhoto"
+               :src="passengerPhoto.startsWith('http') ? passengerPhoto : `${BACKEND_URL}${passengerPhoto}`"
+               class="rrc-avatar-img" />
+          <span v-else class="rrc-initials">{{ passengerInitials }}</span>
         </div>
         <div>
           <p class="rrc-name">{{ passengerName }}</p>
@@ -83,7 +80,7 @@ labelled "Passenger" and the map centres on their location.
         <div v-if="showMap" class="rrc-map-wrap">
           <PingMap
             :passenger-coords="passengerCoords"
-            height="180px"
+            height="210px"
             :zoom="14"
             role="driver"
           />
@@ -274,7 +271,7 @@ const timeAgo = computed(() => {
 /* Map expand/collapse transition */
 .map-expand-enter-active,.map-expand-leave-active { transition:all 0.25s ease; overflow:hidden; }
 .map-expand-enter-from,.map-expand-leave-to { opacity:0; max-height:0; }
-.map-expand-enter-to,.map-expand-leave-from { opacity:1; max-height:200px; }
+.map-expand-enter-to,.map-expand-leave-from { opacity:1; max-height:220px; }
 
 .rrc-accept {
   width:100%; padding:13px; border:none; border-top:1px solid var(--pr-border);

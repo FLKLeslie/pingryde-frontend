@@ -215,7 +215,13 @@ watch(editing, (v) => {
   if (!v) { form.name = userStore.name; form.phone = userStore.phone; form.region = userStore.region }
 })
 
-const photoUrl = (path) => path ? `${BACKEND_URL}${path}` : null
+const photoUrl = (path) => {
+  // Cloudinary URLs are already full URLs, so return as-is
+  // Local paths start with "/" — prepend BACKEND_URL only for those
+  if (!path) return null
+  if (path.startsWith("http")) return path  // Already a full URL
+  return `${BACKEND_URL}${path}`             // Local path
+}
 
 const handlePhotoSelect = async (event) => {
   const file = event.target.files[0]
@@ -229,7 +235,8 @@ const handlePhotoSelect = async (event) => {
     const res = await $fetch(`${API_BASE}/upload/profile/driver/${userStore._id}`, {
       method: 'POST', body: fd,
     })
-    userStore.updateProfile({ profilePhoto: res.photoPath })
+    // Update store with Cloudinary URL
+    userStore.updateProfile({ profilePhoto: res.photoUrl })
     uploadSuccess.value = true
     setTimeout(() => { uploadSuccess.value = false }, 3000)
   } catch (err) {
@@ -271,10 +278,15 @@ const submitVerification = async () => {
     })
 
     // Update store to show pending status
+    // The backend returns updates with Cloudinary URLs
     userStore.updateProfile({
-      verificationStatus: 'pending',
+      verificationStatus: res.updates.verificationStatus || 'pending',
       plateNumber:        verifyForm.plateNumber,
     })
+
+    // Reset form
+    verifyForm.vehiclePhotoFile = null
+    verifyForm.licenseFile = null
   } catch (err) {
     verifyError.value = err?.data?.error || 'Submission failed. Please try again.'
   } finally {

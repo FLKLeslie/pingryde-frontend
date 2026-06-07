@@ -37,7 +37,9 @@
           <NuxtLink :to="userStore.isDriver ? '/driver/profile' : '/passenger/profile'"
                     class="avatar-btn" :title="userStore.name + ' — Profile'">
             <img v-if="userStore.profilePhoto"
-                 :src="`http://localhost:5000${userStore.profilePhoto}`"
+                 :src="userStore.profilePhoto.startsWith('http') 
+                   ? userStore.profilePhoto 
+                   : `http://localhost:5000${userStore.profilePhoto}`"
                  class="avatar-photo" />
             <span v-else>{{ userStore.initials }}</span>
           </NuxtLink>

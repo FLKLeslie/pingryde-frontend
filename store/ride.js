@@ -15,9 +15,12 @@ export const useRideStore = defineStore('ride', {
     assignedDriver:    null,
     pendingRequests:   [],
     chatMessages:      [],
-    chatReady:         false,   // flips true when ride accepted → tracking page loads chat
+    chatReady:         false,
     feedbackPending:   false,
     expiredNotification: null,
+    // arrivedMessage: set when server confirms driver + passenger are within 2m.
+    // Shown as a notification card on the tracking page.
+    arrivedMessage:    null,
   }),
 
   getters: {
@@ -47,6 +50,7 @@ export const useRideStore = defineStore('ride', {
     // Feedback / expiry notifications
     setFeedbackPending(val)       { this.feedbackPending = val },
     setExpiredNotification(data)  { this.expiredNotification = data },
+    setArrivedMessage(msg)        { this.arrivedMessage = msg },
 
     addPendingRequest(req) {
       const id = req.rideId || req._id
@@ -68,6 +72,7 @@ export const useRideStore = defineStore('ride', {
       this.chatReady         = false
       this.feedbackPending   = false
       this.expiredNotification = null
+      this.arrivedMessage    = null
     },
   },
 })

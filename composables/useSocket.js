@@ -103,6 +103,25 @@ export const useSocket = () => {
     socket.on('chatMessage', (msg) => {
       rideStore.addChatMessage(msg)
     })
+
+    // ── Proximity events ─────────────────────────────────────────
+    // partyArrived: server detected driver + passenger are within 2m
+    // → ride status → "ongoing", both parties notified
+    socket.on('partyArrived', ({ rideId, message }) => {
+      if (rideStore.ride?._id?.toString() === rideId?.toString()) {
+        rideStore.updateStatus('ongoing')
+        // Store the message so tracking page can show the notification card
+        rideStore.setArrivedMessage(message)
+      }
+    })
+
+    // ridePendingFeedback: ride was ongoing for 30min with no completion
+    // → both parties asked to confirm
+    socket.on('ridePendingFeedback', ({ rideId, message }) => {
+      if (rideStore.ride?._id?.toString() === rideId?.toString()) {
+        rideStore.updateStatus('pendingFeedback')
+      }
+    })
   }
 
   const registerPassenger     = (userId)          => socket?.emit('passengerOnline', userId)
@@ -112,6 +131,10 @@ export const useSocket = () => {
   const sendPassengerLocation = (rideId, lat, lng)=> socket?.emit('passengerLocationUpdate', { rideId, lat, lng })
   const acceptRide            = (rideId, driverId)=> socket?.emit('acceptRide', { rideId, driverId })
   const completeRide          = (rideId)          => socket?.emit('completeRide', { rideId })
+
+  // Emit GPS coords of both parties so server can do the 2-metre proximity check
+  const emitProximityCheck = ({ rideId, driverLat, driverLng, passengerLat, passengerLng }) =>
+    socket?.emit('checkProximity', { rideId, driverLat, driverLng, passengerLat, passengerLng })
 
   const getSocketId = () => socket?.id ?? null
   const isConnected = () => socket?.connected ?? false
@@ -126,6 +149,7 @@ export const useSocket = () => {
     registerPassenger, goOnline, joinRide,
     sendDriverLocation, sendPassengerLocation,
     acceptRide, completeRide,
+    emitProximityCheck,
     getSocketId, isConnected,
   }
 }

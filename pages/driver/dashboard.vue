@@ -88,7 +88,7 @@
              style="border-top: 1px solid var(--pr-border)">
           <div class="w-2 h-2 rounded-full animate-pulse" style="background: var(--pr-teal)"></div>
           <p class="text-xs" style="color: var(--pr-teal)">
-            Connected — drivers nearby can see your requests
+            Live — passengers can see you on the map and send ride requests
           </p>
         </div>
       </div>
@@ -214,18 +214,28 @@ const ONLINE_KEY = 'pr_driver_online'
 const isOnline = ref(false)   // controls the toggle checkbox
 
 onMounted(async () => {
-  // Ensure socket is connected
   connect()
 
-  // Restore online state from localStorage
-  // This means if the driver refreshed while online, the toggle stays ON
+  // Restore online state from localStorage so toggle survives page refresh
   const wasOnline = localStorage.getItem(ONLINE_KEY) === 'true'
   if (wasOnline && userStore._id) {
     isOnline.value = true
-    // Re-emit driverOnline so backend re-saves the new socketId
-    // (socketId changes on every new connection, so we must re-register)
     goOnline(userStore._id)
-    console.log('[Dashboard] Restored online state, re-registered with backend')
+  }
+
+  // Fetch today's completed ride count for the stats card.
+  // We filter by today's date so the counter resets each day.
+  if (userStore._id) {
+    try {
+      const today = new Date()
+      today.setHours(0,0,0,0)
+      const res = await $fetch(
+        `${API_BASE}/rides/driver/${userStore._id}?status=completed&fromDate=${today.toISOString()}`
+      )
+      stats.completed = res.total || 0
+    } catch {
+      // Not critical — just leave stats at 0
+    }
   }
 })
 
