@@ -30,6 +30,7 @@
             </span>
           </NuxtLink>
           <NuxtLink to="/driver/map"        class="nav-item"><span class="nav-ico">🗺️</span><span class="nav-txt">Active</span></NuxtLink>
+          <NuxtLink to="/driver/history"    class="nav-item"><span class="nav-ico">📋</span><span class="nav-txt">History</span></NuxtLink>
         </nav>
 
         <div class="header-right">
@@ -37,9 +38,7 @@
           <NuxtLink :to="userStore.isDriver ? '/driver/profile' : '/passenger/profile'"
                     class="avatar-btn" :title="userStore.name + ' — Profile'">
             <img v-if="userStore.profilePhoto"
-                 :src="userStore.profilePhoto.startsWith('http') 
-                   ? userStore.profilePhoto 
-                   : `http://localhost:5000${userStore.profilePhoto}`"
+                 :src="`http://localhost:5000${userStore.profilePhoto}`"
                  class="avatar-photo" />
             <span v-else>{{ userStore.initials }}</span>
           </NuxtLink>

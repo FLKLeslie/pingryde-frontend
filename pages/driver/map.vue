@@ -59,7 +59,7 @@ How the passenger appears on the map:
       -->
       <div style="padding:0 16px 12px;">
         <PingMap
-          height="350px"
+          height="360px"
           role="driver"
           :passenger-coords="rideStore.passengerLocation"
           :driver-coords="myLocation"
@@ -161,15 +161,17 @@ import { useUserStore }   from '~/store/user'
 import { useSocket }      from '~/composables/useSocket'
 import { useGeolocation } from '~/composables/useGeolocation'
 import { API_BASE }       from '~/utils/api'
+import { useDriverStats }  from '~/composables/useDriverStats'
 
 const router    = useRouter()
 const rideStore = useRideStore()
 const userStore = useUserStore()
 
 // MUST destructure connect + goOnline — they are called before joinRide
-const { connect, goOnline, joinRide, sendDriverLocation, completeRide, emitProximityCheck } = useSocket()
+const { connect, goOnline, joinRide, sendDriverLocation, broadcastDriverLocation, completeRide, emitProximityCheck } = useSocket()
 const { startWatching, stopWatching, reverseGeocode } = useGeolocation()
 
+const { increment: incrementStat } = useDriverStats(userStore._id)
 const myLocation      = ref(null)   // driver's own GPS
 const myLocationLabel = ref('')     // reverse-geocoded name for the GPS pill
 const chatOpen        = ref(false)
@@ -220,6 +222,9 @@ onMounted(async () => {
 
     // Send driver GPS to passenger's tracking map
     sendDriverLocation(rideStore.ride._id, coords.lat, coords.lng)
+    
+    // Broadcast driver location to all passengers so nearby drivers list updates
+    broadcastDriverLocation(userStore._id, coords.lat, coords.lng)
 
     // Check if driver and passenger are within 2 metres of each other.
     // Server fires 'partyArrived' when they meet.
@@ -261,6 +266,8 @@ const sendChat = async () => {
 
 const handleComplete = async () => {
   if (rideStore.ride?._id) completeRide(rideStore.ride._id)
+  // Increment completed stat — persists in localStorage
+  incrementStat('completed')
   rideStore.clearRide()
   router.push('/driver/dashboard')
 }

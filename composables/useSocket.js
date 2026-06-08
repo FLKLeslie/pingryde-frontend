@@ -30,18 +30,18 @@ export const useSocket = () => {
     if (listenersRegistered) return
     listenersRegistered = true
 
-    // New ride — direct delivery to this driver's socketId
+    // New ride — sent to the 5 nearest drivers via their socketId
     socket.on('newRide', (data) => {
       if (userStore.role !== 'driver') return
       rideStore.addPendingRequest(data)
-    })
-
-    // New ride — broadcast fallback (frontend filters by nearestDriverIds)
-    socket.on('newRideBroadcast', (data) => {
-      if (userStore.role !== 'driver') return
-      const myId = userStore._id?.toString()
-      if (!myId || !data.nearestDriverIds?.includes(myId)) return
-      rideStore.addPendingRequest(data)
+      // Track received stat in localStorage (using the driver's own composable)
+      try {
+        const key = `pr_driver_stats_${userStore._id}`
+        const raw = localStorage.getItem(key)
+        const s   = raw ? JSON.parse(raw) : { received:0, accepted:0, completed:0 }
+        s.received++
+        localStorage.setItem(key, JSON.stringify(s))
+      } catch {}
     })
 
     // Driver GPS → update driver location in store (passenger sees this)
@@ -124,13 +124,14 @@ export const useSocket = () => {
     })
   }
 
-  const registerPassenger     = (userId)          => socket?.emit('passengerOnline', userId)
-  const goOnline              = (driverId)        => socket?.emit('driverOnline', driverId)
-  const joinRide              = (rideId)          => socket?.emit('joinRide', { rideId })
-  const sendDriverLocation    = (rideId, lat, lng)=> socket?.emit('driverLocationUpdate', { rideId, lat, lng })
-  const sendPassengerLocation = (rideId, lat, lng)=> socket?.emit('passengerLocationUpdate', { rideId, lat, lng })
-  const acceptRide            = (rideId, driverId)=> socket?.emit('acceptRide', { rideId, driverId })
-  const completeRide          = (rideId)          => socket?.emit('completeRide', { rideId })
+  const registerPassenger      = (userId)          => socket?.emit('passengerOnline', userId)
+  const goOnline               = (driverId)        => socket?.emit('driverOnline', driverId)
+  const joinRide               = (rideId)          => socket?.emit('joinRide', { rideId })
+  const sendDriverLocation     = (rideId, lat, lng)=> socket?.emit('driverLocationUpdate', { rideId, lat, lng })
+  const sendPassengerLocation  = (rideId, lat, lng)=> socket?.emit('passengerLocationUpdate', { rideId, lat, lng })
+  const acceptRide             = (rideId, driverId)=> socket?.emit('acceptRide', { rideId, driverId })
+  const completeRide           = (rideId)          => socket?.emit('completeRide', { rideId })
+  const broadcastDriverLocation = (driverId, lat, lng) => socket?.emit('driverLocationBroadcast', { driverId, lat, lng })
 
   // Emit GPS coords of both parties so server can do the 2-metre proximity check
   const emitProximityCheck = ({ rideId, driverLat, driverLng, passengerLat, passengerLng }) =>
@@ -149,6 +150,7 @@ export const useSocket = () => {
     registerPassenger, goOnline, joinRide,
     sendDriverLocation, sendPassengerLocation,
     acceptRide, completeRide,
+    broadcastDriverLocation,
     emitProximityCheck,
     getSocketId, isConnected,
   }

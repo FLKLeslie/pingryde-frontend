@@ -24,33 +24,17 @@
         :style="{ height: mapHeight }"
         :passenger-coords="myLocation"
         :passenger-label="townName"
+        :location-label="townName"
         :nearby-drivers="nearbyDrivers"
         :show-nearby="true"
         :destination-mode="destinationMode"
         :destination-coords="destCoords"
         @driver-click="openDriverSheet"
         @destination-picked="onDestinationPicked"
+        @cancel-destination="destinationMode = false"
       />
 
-      <!-- GPS / town name pill -->
-      <div class="map-gps-badge">
-        <span v-if="locating" class="gps-pill gps-pill--loading">
-          <span class="gps-dot gps-dot--yellow"></span>Getting location...
-        </span>
-        <span v-else-if="myLocation" class="gps-pill gps-pill--ready">
-          <span class="gps-dot gps-dot--teal"></span>
-          <!-- Show town name once reverse geocoding resolves, otherwise coords -->
-          {{ townName || `${myLocation.lat.toFixed(4)}, ${myLocation.lng.toFixed(4)}` }}
-        </span>
-        <span v-else class="gps-pill gps-pill--error">
-          <span class="gps-dot gps-dot--red"></span>Location unavailable
-        </span>
-      </div>
-
-      <!-- Destination-mode cancel button -->
-      <button v-if="destinationMode" class="dest-mode-cancel" @click="destinationMode = false">
-        ✕ Cancel
-      </button>
+      <!-- GPS / town name pill is now rendered inside PingMap (top-right) -->
     </div>
 
     <!-- Map legend -->
@@ -304,6 +288,7 @@ import { useRouter }      from 'vue-router'
 import { useUserStore }   from '~/store/user'
 import { useRideStore }   from '~/store/ride'
 import { useGeolocation } from '~/composables/useGeolocation'
+import { useSocket }      from '~/composables/useSocket'
 import { API_BASE }       from '~/utils/api'
 
 const router    = useRouter()
@@ -340,8 +325,8 @@ const selectedDriverInitials = computed(() =>
   (selectedDriver.value?.name || '??').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 )
 const mapHeight = computed(() => {
-  if (typeof window === 'undefined') return '260px'
-  return window.innerWidth >= 640 ? '300px' : '240px'
+  if (typeof window === 'undefined') return '300px'
+  return window.innerWidth >= 640 ? '360px' : '290px'
 })
 const showLocationFields = computed(() =>
   (form.rideCategory === 'normal'  && form.rideType !== '') ||
@@ -454,6 +439,48 @@ const fetchNearby = async () => {
   } catch (e) { console.warn('[Request] fetchNearby:', e.message) }
 }
 
+// ── Real-time nearby driver updates ──────────────────────────────
+const registerNearbyDriverListeners = (socket) => {
+  // When a driver comes online, add them to the nearby drivers list
+  socket.on('driverStatusUpdate', (data) => {
+    if (data.type === 'online' && data.driver) {
+      // Check if this driver is near the passenger
+      if (!myLocation.value) return
+      const { lat: pLat, lng: pLng } = myLocation.value
+      const { lat: dLat, lng: dLng } = data.driver.currentLocation || {}
+      if (!dLat || !dLng) return
+      
+      const RADIUS = 0.09 // ~10km
+      const latDiff = Math.abs(dLat - pLat)
+      const lngDiff = Math.abs(dLng - pLng)
+      
+      if (latDiff < RADIUS && lngDiff < RADIUS) {
+        // Check if driver already in list
+        const exists = nearbyDrivers.value.some(d => d._id?.toString() === data.driver._id?.toString())
+        if (!exists) {
+          nearbyDrivers.value.push(data.driver)
+        }
+      }
+    } else if (data.type === 'offline' && data.driverId) {
+      // Remove driver from nearby list when they go offline
+      nearbyDrivers.value = nearbyDrivers.value.filter(
+        d => d._id?.toString() !== data.driverId?.toString()
+      )
+    }
+  })
+  
+  // When a driver's location updates, update their position in the nearby list
+  socket.on('nearbyDriverLocationUpdate', (data) => {
+    if (data.driverId && data.lat !== undefined && data.lng !== undefined) {
+      const driver = nearbyDrivers.value.find(d => d._id?.toString() === data.driverId?.toString())
+      if (driver && driver.currentLocation) {
+        driver.currentLocation.lat = data.lat
+        driver.currentLocation.lng = data.lng
+      }
+    }
+  })
+}
+
 // ── Mount ──────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
@@ -471,6 +498,21 @@ onMounted(async () => {
 
     await fetchNearby()
     nearbyInterval = setInterval(fetchNearby, 30_000)
+    
+    // ── Real-time socket listeners for nearby drivers ───────────────────
+    const { socket } = useSocket()
+    if (socket?.connected) {
+      registerNearbyDriverListeners(socket)
+    } else {
+      // If socket not ready yet, wait and register listeners
+      const checkSocket = setInterval(() => {
+        const { socket: s } = useSocket()
+        if (s?.connected) {
+          registerNearbyDriverListeners(s)
+          clearInterval(checkSocket)
+        }
+      }, 100)
+    }
   } catch {
     errorMsg.value = 'Could not get location. Enable GPS and refresh.'
   } finally {

@@ -17,12 +17,15 @@ labelled "Passenger" and the map centres on their location.
     <!-- Top: passenger info + badge -->
     <div class="rrc-top">
       <div class="rrc-passenger">
-        <!-- Photo or initials -->
+        <!-- Photo placeholder — replace <span> with <img> when photos are ready -->
         <div class="rrc-avatar">
-          <img v-if="passengerPhoto"
-               :src="passengerPhoto.startsWith('http') ? passengerPhoto : `${BACKEND_URL}${passengerPhoto}`"
-               class="rrc-avatar-img" />
-          <span v-else class="rrc-initials">{{ passengerInitials }}</span>
+          <span class="rrc-initials">{{ passengerInitials }}</span>
+          <!--
+            FUTURE PHOTO:
+            <img v-if="passengerPhoto"
+                 :src="`${BACKEND_URL}${passengerPhoto}`"
+                 class="rrc-avatar-img" />
+          -->
         </div>
         <div>
           <p class="rrc-name">{{ passengerName }}</p>
@@ -78,10 +81,20 @@ labelled "Passenger" and the map centres on their location.
       </button>
       <Transition name="map-expand">
         <div v-if="showMap" class="rrc-map-wrap">
+          <!--
+            PingMap shows:
+              Teal pin   = passenger (passengerCoords from socket payload)
+              Vehicle pin = driver's OWN location (from ride store)
+            role="driver" means teal=Passenger, vehicle=You.
+            This lets the driver see how far they are from the passenger
+            BEFORE deciding to accept.
+          -->
           <PingMap
             :passenger-coords="passengerCoords"
+            :driver-coords="driverOwnLocation"
+            :driver-type="request.rideType || 'bike'"
             height="210px"
-            :zoom="14"
+            :zoom="13"
             role="driver"
           />
         </div>
@@ -98,12 +111,20 @@ labelled "Passenger" and the map centres on their location.
 
 <script setup>
 import { ref, computed } from 'vue'
-import { BACKEND_URL } from '~/utils/api'
+import { BACKEND_URL }   from '~/utils/api'
+import { useRideStore }  from '~/store/ride'
 
 const props = defineProps({
   request: { type: Object, required: true },
 })
 defineEmits(['accept'])
+
+// Driver's own last-known location from the store.
+// When the driver is on the dashboard/requests page, their GPS
+// may not be actively streaming, so this could be null.
+// If null, the mini-map just shows the passenger pin only.
+const rideStore          = useRideStore()
+const driverOwnLocation  = computed(() => rideStore.driverLocation || null)
 
 // Toggle state for the mini-map — collapsed by default
 const showMap = ref(false)
@@ -271,7 +292,7 @@ const timeAgo = computed(() => {
 /* Map expand/collapse transition */
 .map-expand-enter-active,.map-expand-leave-active { transition:all 0.25s ease; overflow:hidden; }
 .map-expand-enter-from,.map-expand-leave-to { opacity:0; max-height:0; }
-.map-expand-enter-to,.map-expand-leave-from { opacity:1; max-height:220px; }
+.map-expand-enter-to,.map-expand-leave-from { opacity:1; max-height:300px; }
 
 .rrc-accept {
   width:100%; padding:13px; border:none; border-top:1px solid var(--pr-border);

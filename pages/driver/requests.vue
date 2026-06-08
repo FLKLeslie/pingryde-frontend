@@ -143,11 +143,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter }    from 'vue-router'
-import { useUserStore } from '~/store/user'
-import { useRideStore } from '~/store/ride'
-import { useSocket }    from '~/composables/useSocket'
-import { API_BASE }     from '~/utils/api'
+import { useRouter }      from 'vue-router'
+import { useUserStore }   from '~/store/user'
+import { useRideStore }   from '~/store/ride'
+import { useSocket }      from '~/composables/useSocket'
+import { useDriverStats } from '~/composables/useDriverStats'
+import { API_BASE }       from '~/utils/api'
 
 const router    = useRouter()
 const userStore = useUserStore()
@@ -210,13 +211,20 @@ onMounted(fetchRides)
 // ── Handle accept ──────────────────────────────────────────────────
 // 1. Emit the acceptRide socket event so the server processes it
 // 2. Remove the ride from both local lists (optimistic update)
-// 3. Navigate to the active ride map
+// 3. Increment the 'accepted' stat for accuracy calculation
+// 4. Navigate to the active ride map
 const handleAccept = (req) => {
   const rideId = req.rideId?.toString() || req._id?.toString()
   if (!rideId || !userStore._id) return
 
+  // Import the stats composable to track accepted rides
+  const { increment: incrementStat } = useDriverStats(userStore._id)
+
   // Tell the server this driver is accepting
   socketAcceptRide(rideId, userStore._id)
+
+  // Increment the accepted stat for accuracy calculation
+  incrementStat('accepted')
 
   // Optimistically remove from both lists so it disappears immediately
   rideStore.removeRequest(rideId)
