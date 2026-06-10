@@ -125,15 +125,15 @@ const getPhotoUrl = (path) => {
 /* Mobile: hide labels and adjust spacing */
 @media (max-width:639px) { 
   .nav-txt { display:none; }
-  .nav-item { padding:8px 10px;gap:0; }
+  .nav-item { padding:8px 18px;gap:0; }
   .brand-name { display:none; }
   .main-nav { gap:6px; }
 }
 
 /* Extra small screens */
 @media (max-width:479px) {
-  .header-inner { gap:4px;padding:0 12px; }
-  .nav-item { padding:7px 9px; }
+  .header-inner { gap:5px;padding:0 12px; }
+  .nav-item { padding:10px 9px; }
   .brand-icon { width:28px;height:28px;font-size:13px; }
 }
 
