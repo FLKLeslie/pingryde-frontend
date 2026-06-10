@@ -175,7 +175,11 @@ const formatDate = (d) => new Date(d).toLocaleDateString('en-GB', {
   day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
 })
 
-const photoUrl = (path) => path ? `${BACKEND_URL}${path}` : null
+const photoUrl = (path) => {
+  if (!path) return null
+  if (path.startsWith('http')) return path  // Cloudinary URL — use as-is
+  return `${BACKEND_URL}${path}`             // Local path — prepend backend URL
+}
 
 onMounted(async () => {
   if (!userStore._id) return

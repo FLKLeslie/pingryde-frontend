@@ -7,8 +7,8 @@
       <!-- Profile photo -->
       <div class="photo-wrap">
         <div class="photo-circle">
-          <img v-if="photoPreview || userStore.user?.profilePhoto"
-               :src="photoPreview || photoUrl(userStore.user?.profilePhoto)"
+          <img v-if="photoPreview || userStore.profilePhoto"
+               :src="photoPreview || photoUrl(userStore.profilePhoto)"
                alt="Profile" class="photo-img" />
           <span v-else class="photo-initials">{{ userStore.initials }}</span>
         </div>

@@ -38,7 +38,7 @@
           <NuxtLink :to="userStore.isDriver ? '/driver/profile' : '/passenger/profile'"
                     class="avatar-btn" :title="userStore.name + ' — Profile'">
             <img v-if="userStore.profilePhoto"
-                 :src="`http://localhost:5000${userStore.profilePhoto}`"
+                 :src="getPhotoUrl(userStore.profilePhoto)"
                  class="avatar-photo" />
             <span v-else>{{ userStore.initials }}</span>
           </NuxtLink>
@@ -81,6 +81,13 @@ import { useRideStore } from '~/store/ride'
 const userStore = useUserStore()
 const rideStore = useRideStore()
 const year      = new Date().getFullYear()
+
+// Helper to handle both Cloudinary URLs and local paths
+const getPhotoUrl = (path) => {
+  if (!path) return null
+  if (path.startsWith('http')) return path  // Cloudinary URL — use as-is
+  return `http://localhost:5000${path}`     // Local path — prepend backend URL
+}
 </script>
 
 <style scoped>
@@ -103,7 +110,7 @@ const year      = new Date().getFullYear()
 }
 .brand-name { font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--pr-teal); }
 
-.main-nav { display:flex;align-items:center;gap:2px;flex:1;justify-content:center; }
+.main-nav { display:flex;align-items:center;gap:4px;flex:1;justify-content:center; }
 
 .nav-item {
   position:relative;display:flex;align-items:center;gap:6px;
@@ -115,8 +122,20 @@ const year      = new Date().getFullYear()
 .nav-item.router-link-active { background:rgba(0,212,184,0.1);color:var(--pr-teal); }
 .nav-ico { font-size:15px;line-height:1; }
 
-/* Hide labels on very small screens */
-@media (max-width:479px) { .nav-txt { display:none; } .nav-item { padding:8px 10px; } .brand-name { display:none; } }
+/* Mobile: hide labels and adjust spacing */
+@media (max-width:639px) { 
+  .nav-txt { display:none; }
+  .nav-item { padding:8px 10px;gap:0; }
+  .brand-name { display:none; }
+  .main-nav { gap:6px; }
+}
+
+/* Extra small screens */
+@media (max-width:479px) {
+  .header-inner { gap:4px;padding:0 12px; }
+  .nav-item { padding:7px 9px; }
+  .brand-icon { width:28px;height:28px;font-size:13px; }
+}
 
 .notif-dot {
   position:absolute;top:4px;right:4px;
@@ -128,13 +147,14 @@ const year      = new Date().getFullYear()
 }
 @keyframes notifPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
 
-.header-right { display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0; }
+.header-right { display:flex;align-items:center;gap:12px;margin-left:auto;flex-shrink:0; }
 
 .region-pill {
   font-size:11px;color:var(--pr-muted);padding:5px 10px;border-radius:999px;
   border:1px solid rgba(255,255,255,0.07);white-space:nowrap;background:rgba(255,255,255,0.03);
 }
 @media (max-width:639px) { .region-pill { display:none; } }
+@media (max-width:479px) { .header-right { gap:10px; } }
 
 .avatar-btn {
   width:36px;height:36px;border-radius:50%;
