@@ -162,7 +162,7 @@
           <h2 class="section-h2">How PingRyde works</h2>
           <p class="section-desc">
             Four steps from "I need a ride" to "I'm on my way" —
-            all happening in under 30 seconds.
+            all happening in less than no time.
           </p>
         </div>
 
