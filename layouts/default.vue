@@ -132,7 +132,7 @@ const getPhotoUrl = (path) => {
 
 /* Extra small screens */
 @media (max-width:479px) {
-  .header-inner { gap:5px;padding:0 12px; }
+  .header-inner { gap:4px;padding:0 12px; }
   .nav-item { padding:10px 9px; }
   .brand-icon { width:28px;height:28px;font-size:13px; }
 }

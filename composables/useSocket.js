@@ -74,6 +74,15 @@ export const useSocket = () => {
 
     socket.on('rideAlreadyTaken', () => rideStore.removeFirstPending())
 
+    // A pending request this driver was shown got cancelled by the
+    // passenger before any driver accepted it — remove the card.
+    socket.on('rideRequestCancelled', ({ rideId }) => {
+      rideStore.removeRequest(rideId)
+    })
+    // Another driver accepted this request first — remove the card.
+    socket.on('rideRequestTaken', ({ rideId }) => {
+      rideStore.removeRequest(rideId)
+    })
     socket.on('rideCompleted', ({ rideId }) => {
       if (rideStore.ride?._id?.toString() === rideId?.toString()) {
         rideStore.updateStatus('completed')
@@ -126,6 +135,7 @@ export const useSocket = () => {
 
   const registerPassenger      = (userId)          => socket?.emit('passengerOnline', userId)
   const goOnline               = (driverId)        => socket?.emit('driverOnline', driverId)
+  const goOffline               = (driverId)        => socket?.emit('driverOffline', driverId)
   const joinRide               = (rideId)          => socket?.emit('joinRide', { rideId })
   const sendDriverLocation     = (rideId, lat, lng)=> socket?.emit('driverLocationUpdate', { rideId, lat, lng })
   const sendPassengerLocation  = (rideId, lat, lng)=> socket?.emit('passengerLocationUpdate', { rideId, lat, lng })
@@ -147,11 +157,12 @@ export const useSocket = () => {
 
   return {
     connect, disconnect,
-    registerPassenger, goOnline, joinRide,
+    registerPassenger, goOnline, goOffline, joinRide,
     sendDriverLocation, sendPassengerLocation,
     acceptRide, completeRide,
     broadcastDriverLocation,
     emitProximityCheck,
     getSocketId, isConnected,
+    socket,
   }
 }

@@ -173,7 +173,7 @@ import { API_BASE }        from '~/utils/api'
 const router    = useRouter()
 const userStore = useUserStore()
 const rideStore = useRideStore()
-const { connect, goOnline, acceptRide: socketAccept, broadcastDriverLocation } = useSocket()
+const { connect, goOnline, goOffline, acceptRide: socketAccept, broadcastDriverLocation } = useSocket()
 const { getOnce, reverseGeocode, startWatching, stopWatching } = useGeolocation()
 
 const firstName       = computed(() => userStore.name?.split(' ')[0] || 'Driver')
@@ -241,6 +241,7 @@ const handleToggle = async () => {
       stopWatching()
     }
   } else {
+    goOffline(userStore._id)
     localStorage.removeItem(ONLINE_KEY)
     userStore.setStatus('offline')
     stopWatching()
