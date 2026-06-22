@@ -116,20 +116,24 @@
         </div>
       </Transition>
 
-      <!-- ACCEPTED — driver found -->
+     <!-- DRIVER CARD — always visible once driver is assigned, until ride completes -->
       <Transition name="pr-fade-up">
         <div v-if="rideStore.assignedDriver && rideStore.ride?.status !== 'completed'"
              class="status-card status-card--accepted pr-animate-in">
+
+          <!-- Banner: swaps between "on the way" and "is here" based on arrival -->
           <div class="accepted-banner">
-            <span class="accepted-check">✅</span>
+            <span class="accepted-check">{{ arrivedNotification ? '📍' : '✅' }}</span>
             <div>
-              <p class="accepted-title">Driver is on the way!</p>
-              <p class="accepted-sub">Tap 👤 to view driver details</p>
+              <p class="accepted-title">
+                {{ arrivedNotification ? 'Driver is here!' : 'Driver is on the way!' }}
+              </p>
+              <p class="accepted-sub">Tap 👤 to view details · 📞 to call · 💬 to chat</p>
             </div>
           </div>
 
+          <!-- Driver mini-profile row — always visible -->
           <div class="driver-mini" @click="driverModalOpen = true">
-            <!-- Profile photo or initials -->
             <div class="driver-mini-avatar">
               <img
                 v-if="rideStore.assignedDriver.profilePhoto"
@@ -142,9 +146,7 @@
             <div class="driver-mini-info">
               <p class="driver-mini-name">
                 {{ rideStore.assignedDriver.name }}
-                <span v-if="rideStore.assignedDriver.isVerified" class="verified-badge" title="Verified driver">
-                  ✓
-                </span>
+                <span v-if="rideStore.assignedDriver.isVerified" class="verified-badge" title="Verified driver">✓</span>
               </p>
               <p class="driver-mini-sub">
                 {{ rideStore.assignedDriver.vehicleType === 'bike' ? '🏍️ Motorbike' : '🚕 Taxi' }}
@@ -157,8 +159,29 @@
         </div>
       </Transition>
 
-      <!-- ARRIVED — driver and passenger within 2 metres -->
+      <!-- ARRIVAL ACTION BOX — appears below driver card when driver arrives -->
       <Transition name="pr-fade-up">
+        <div v-if="arrivedNotification && rideStore.ride?.status !== 'completed'"
+             class="status-card status-card--arrived pr-animate-in">
+          <div class="status-icon">🤝</div>
+          <div class="status-text">
+            <p class="status-title">Your ride should be ongoing now</p>
+            <p class="status-desc">
+              Your driver has reached your location. Please tap complete once you arrive at your destination.
+            </p>
+          </div>
+          <div class="feedback-buttons">
+            <button @click="confirmRide" class="pr-btn pr-btn-primary pr-btn-inline">
+              ✅ Ride Completed
+            </button>
+            <button @click="cancelFromFeedback" class="pr-btn pr-btn-danger pr-btn-inline">
+              ❌ Something went wrong
+            </button>
+          </div>
+        </div>
+      </Transition>
+      <!-- ARRIVED — driver and passenger within 2 metres -->
+      <!-- <Transition name="pr-fade-up">
         <div v-if="arrivedNotification" class="status-card status-card--arrived pr-animate-in">
           <div class="status-icon">🤝</div>
           <div class="status-text">
@@ -169,7 +192,7 @@
             </p>
           </div>
         </div>
-      </Transition>
+      </Transition> -->
 
       <!-- PENDING FEEDBACK — ride timed out without being marked complete -->
       <Transition name="pr-fade-up">
@@ -359,7 +382,20 @@ const chatEl              = ref(null)
 const townName            = ref('')
 // arrivedNotification: true when server confirmed <2m proximity.
 // Driven from the store so it persists if the component re-renders.
-const arrivedNotification = computed(() => !!rideStore.arrivedMessage)
+const arrivedNotification = computed(() => {
+  // Flip to "arrived" as soon as the store's arrivedMessage is set (server
+  // confirmed <2m), OR as soon as the driver location on the map gets within
+  // 50m of the passenger — matching what the map ETA bubble already shows.
+  if (rideStore.arrivedMessage) return true
+  const d = rideStore.driverLocation
+  const p = rideStore.passengerLocation
+  if (!d || !p) return false
+  const dLat = d.lat * Math.PI / 180, pLat = p.lat * Math.PI / 180
+  const dLng = d.lng * Math.PI / 180, pLng = p.lng * Math.PI / 180
+  const a = Math.sin((pLat-dLat)/2)**2 + Math.cos(dLat)*Math.cos(pLat)*Math.sin((pLng-dLng)/2)**2
+  const metres = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+  return metres <= 50
+})
 let pollInterval    = null
 let waitingInterval = null
 let expirySeconds   = ref(600)
@@ -461,12 +497,19 @@ onMounted(async () => {
   // event was missed (e.g. due to a brief network interruption)
   pollInterval = setInterval(pollRideStatus, 8000)
 
-  // If the ride was already accepted before this page loaded, fetch chat history
-  if (rideStore.ride.status === 'accepted') {
+// If the ride was already accepted before this page loaded, fetch chat
+  // history and restore the driver profile (assignedDriver is not saved
+  // to localStorage so it disappears on reload without this re-fetch).
+  if (['accepted','ongoing'].includes(rideStore.ride.status)) {
     await loadChat()
+    if (!rideStore.assignedDriver) {
+      try {
+        const res = await $fetch(`${API_BASE}/rides/${rideStore.ride._id}`)
+        if (res.driver) rideStore.setAssignedDriver(res.driver)
+      } catch {}
+    }
   }
 })
-
 onBeforeUnmount(() => {
   stopWatching()
   if (pollInterval)    clearInterval(pollInterval)
