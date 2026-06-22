@@ -27,7 +27,8 @@
 // ─────────────────────────────────────────────────────────────────────
 // const BACKEND_HOST = process.env.NUXT_PUBLIC_BACKEND_URL || 'http://localhost:5000'
 // ── Change this ONE value when you host the backend somewhere else ──
-const BACKEND_HOST = 'https://pingryde-backend.onrender.com'
+// const BACKEND_HOST = 'https://pingryde-backend.onrender.com'
+const BACKEND_HOST = 'https://pingryde-backend-4d6395471be1.herokuapp.com'
 // const BACKEND_HOST = 'http://localhost:5000'
 // ───────────────────────────────────────────────────────────────────
 
