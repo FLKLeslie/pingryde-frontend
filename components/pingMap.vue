@@ -324,35 +324,35 @@ onMounted(async () => {
 })
 
 // ── Watchers ──────────────────────────────────────────────────────
-
-watch(() => props.passengerCoords, (c) => {
-  if (!c?.lat || !map || !L) return
+watch(() => [props.passengerCoords?.lat, props.passengerCoords?.lng], ([lat, lng]) => {
+  if (!lat || !lng || !map || !L) return
+  const c = { lat, lng }
   const isDriver = props.role === 'driver'
   if (passengerMarker) {
-    passengerMarker.setLatLng([c.lat, c.lng])
+    passengerMarker.setLatLng([lat, lng])
     passengerMarker.setTooltipContent(passengerTooltip())
   } else {
-    passengerMarker = L.marker([c.lat,c.lng],{icon:makePersonIcon()}).addTo(map)
-    passengerMarker.bindTooltip(passengerTooltip(),{direction:'top',offset:[0,-24]})
+    passengerMarker = L.marker([lat, lng], { icon: makePersonIcon() }).addTo(map)
+    passengerMarker.bindTooltip(passengerTooltip(), { direction: 'top', offset: [0, -24] })
   }
-  if (!isDriver) map.setView([c.lat,c.lng], map.getZoom(), { animate:true })
+  if (!isDriver) map.setView([lat, lng], map.getZoom(), { animate: true })
   if (props.showEta) updateRouteLine()
-}, { deep: true })
+})
 
-watch(() => props.driverCoords, (c) => {
-  if (!c?.lat || !map || !L) return
+watch(() => [props.driverCoords?.lat, props.driverCoords?.lng], ([lat, lng]) => {
+  if (!lat || !lng || !map || !L) return
   const isDriver = props.role === 'driver'
   if (driverMarker) {
-    driverMarker.setLatLng([c.lat,c.lng])
+    driverMarker.setLatLng([lat, lng])
     driverMarker.setTooltipContent(driverTooltip())
   } else {
-    driverMarker = L.marker([c.lat,c.lng],{icon:makeVehicleIcon(props.driverType)}).addTo(map)
-    driverMarker.bindTooltip(driverTooltip(),{direction:'top',offset:[0,-20]})
+    driverMarker = L.marker([lat, lng], { icon: makeVehicleIcon(props.driverType) }).addTo(map)
+    driverMarker.bindTooltip(driverTooltip(), { direction: 'top', offset: [0, -20] })
   }
-  if (isDriver) map.setView([c.lat,c.lng], map.getZoom(), { animate:true })
-  else          map.panTo([c.lat,c.lng], { animate:true, duration:0.5 })
+  if (isDriver) map.setView([lat, lng], map.getZoom(), { animate: true })
+  else          map.panTo([lat, lng], { animate: true, duration: 0.5 })
   if (props.showEta) updateRouteLine()
-}, { deep: true })
+})
 
 // CRITICAL: redraw route when showEta switches on (both coords may already exist)
 watch(() => props.showEta, () => updateRouteLine())
