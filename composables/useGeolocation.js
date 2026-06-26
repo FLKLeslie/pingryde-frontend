@@ -104,9 +104,6 @@ export const useGeolocation = () => {
   }
 
   // ── Continuous GPS watch ────────────────────────────────────────
-  // maximumAge:0 forces fresh positions — no cached readings
-  let intervalId = null
-
   const startWatching = (onUpdate) => {
     if (!navigator.geolocation) { error.value = 'GPS not supported'; return }
 
@@ -118,26 +115,14 @@ export const useGeolocation = () => {
     const handleErr = (err) => { error.value = err.message }
     const gpsOpts   = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
 
-    // Immediate first fix
-    navigator.geolocation.getCurrentPosition(handlePos, handleErr, gpsOpts)
-
-    // Continuous watch (fires on movement, but can silently stop on some devices)
+    // Continuous watch for real-time movement updates
     watchId = navigator.geolocation.watchPosition(handlePos, handleErr, gpsOpts)
-
-    // Guaranteed fallback — polls every 3 seconds regardless of watchPosition
-    intervalId = setInterval(() => {
-      navigator.geolocation.getCurrentPosition(handlePos, handleErr, gpsOpts)
-    }, 3000)
   }
 
   const stopWatching = () => {
     if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId)
       watchId = null
-    }
-    if (intervalId !== null) {
-      clearInterval(intervalId)
-      intervalId = null
     }
   }
 

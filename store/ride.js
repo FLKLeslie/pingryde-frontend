@@ -43,6 +43,8 @@ export const useRideStore = defineStore('ride', {
     feedbackPending:     false,
     expiredNotification: null,
     arrivedMessage:      null,
+    cancelledBy:         null,
+    completionMessage:   null,
   }),
 
   actions: {
@@ -87,7 +89,9 @@ export const useRideStore = defineStore('ride', {
     setChatReady(val) { this.chatReady    = val },
 
     // ── Feedback / expiry / arrival ───────────────────────────────
-    setFeedbackPending(val)      { this.feedbackPending     = val },
+    setFeedbackPending(v)      { this.feedbackPending     = v },
+    setCancelledBy(v)          { this.cancelledBy         = v },
+    setCompletionMessage(v)    { this.completionMessage   = v },
     setExpiredNotification(data) { this.expiredNotification = data },
     setArrivedMessage(msg)       { this.arrivedMessage      = msg },
 

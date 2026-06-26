@@ -225,12 +225,26 @@ const handleToggle = async () => {
   locationError.value = ''
   if (isOnline.value) {
     try {
+      // const coords = await getOnce()
+      // goOnline(userStore._id)
+      // localStorage.setItem(ONLINE_KEY, 'true')
+      // userStore.setStatus('online')
+      
+      // // Start watching GPS to broadcast location to nearby passengers
+      // startWatching((coords) => {
+      //   broadcastDriverLocation(userStore._id, coords.lat, coords.lng)
+      // })
       const coords = await getOnce()
       goOnline(userStore._id)
+      // Immediately broadcast location so DB has currentLocation
+      // the moment the driver goes online — previously this was null
+      // until watchPosition fired its first callback (several seconds later),
+      // causing the driver to be filtered out of ride requests entirely.
+      broadcastDriverLocation(userStore._id, coords.lat, coords.lng)
       localStorage.setItem(ONLINE_KEY, 'true')
       userStore.setStatus('online')
       
-      // Start watching GPS to broadcast location to nearby passengers
+      // Continue watching GPS to keep broadcasting location
       startWatching((coords) => {
         broadcastDriverLocation(userStore._id, coords.lat, coords.lng)
       })
@@ -255,5 +269,7 @@ const acceptRide = (req) => {
   rideStore.removeRequest(rideId)
   incrementStat('accepted')
   router.push('/driver/map')
+  // window.location.href = '/driver/map'
+
 }
 </script>

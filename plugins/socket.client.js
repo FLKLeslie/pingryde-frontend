@@ -26,11 +26,31 @@ export default defineNuxtPlugin(() => {
       registerPassenger(userStore._id)
     }
 
+    // if (userStore.isDriver && userStore._id) {
+    //   // Restore driver online status from localStorage
+    //   const wasOnline = localStorage.getItem('pr_driver_online') === 'true'
+    //   if (wasOnline) {
+    //     goOnline(userStore._id)
+    //   }
+    // }
     if (userStore.isDriver && userStore._id) {
       // Restore driver online status from localStorage
       const wasOnline = localStorage.getItem('pr_driver_online') === 'true'
       if (wasOnline) {
         goOnline(userStore._id)
+        // Also immediately broadcast location so currentLocation is set
+        // in the DB right away — otherwise the driver appears online but
+        // has no location, and gets filtered out of ride request matching.
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            const { broadcastDriverLocation } = useSocket()
+            broadcastDriverLocation(
+              userStore._id,
+              pos.coords.latitude,
+              pos.coords.longitude
+            )
+          }, () => {}, { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 })
+        }
       }
     }
   }

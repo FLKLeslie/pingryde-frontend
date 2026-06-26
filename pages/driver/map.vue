@@ -124,6 +124,26 @@ How the passenger appears on the map:
         <button @click="handleComplete" class="pr-btn pr-btn-secondary">✅ Mark as Complete</button>
         <button @click="handleCancel"   class="pr-btn pr-btn-danger" style="font-size:14px;padding:12px">Cancel Ride</button>
 
+        <!-- Passenger confirmed ride complete — "good job" message -->
+        <Transition name="pr-fade-up">
+          <div v-if="rideStore.completionMessage"
+               style="background:rgba(0,212,184,0.1);border:1px solid rgba(0,212,184,0.3);border-radius:12px;padding:16px;text-align:center;">
+            <p style="font-size:22px;margin:0 0 6px;">🎉</p>
+            <p style="font-size:15px;font-weight:700;color:var(--pr-teal);margin:0 0 4px;">{{ rideStore.completionMessage }}</p>
+            <button @click="handleComplete" class="pr-btn pr-btn-primary pr-btn-inline mt-3">Back to Dashboard</button>
+          </div>
+        </Transition>
+
+        <!-- Passenger cancelled — notify driver and redirect -->
+        <Transition name="pr-fade-up">
+          <div v-if="rideStore.ride?.status === 'cancelled' && rideStore.cancelledBy === 'passenger'"
+               style="background:rgba(255,71,71,0.08);border:1px solid rgba(255,71,71,0.3);border-radius:12px;padding:16px;text-align:center;">
+            <p style="font-size:22px;margin:0 0 6px;">❌</p>
+            <p style="font-size:15px;font-weight:700;margin:0 0 4px;">Passenger cancelled this ride.</p>
+            <button @click="handleCancel" class="pr-btn pr-btn-danger pr-btn-inline mt-3">Back to Dashboard</button>
+          </div>
+        </Transition>
+
       </div>
     </template>
 
@@ -168,7 +188,7 @@ const rideStore = useRideStore()
 const userStore = useUserStore()
 
 // MUST destructure connect + goOnline — they are called before joinRide
-const { connect, goOnline, joinRide, sendDriverLocation, broadcastDriverLocation, completeRide, emitProximityCheck, isConnected } = useSocket()
+const { connect, goOnline, joinRide, sendDriverLocation, broadcastDriverLocation, completeRide, emitProximityCheck } = useSocket()
 const { startWatching, stopWatching, reverseGeocode } = useGeolocation()
 
 const { increment: incrementStat } = useDriverStats(userStore._id)
@@ -208,21 +228,9 @@ watch(chatOpen, (open) => {
 
 onMounted(async () => {
   if (!rideStore.ride) return
-// Step 1 — open socket (must be first)
+
+  // Step 1 — open socket (must be first)
   connect()
-
-  // Steps 2 & 3 — wait until socket is actually connected before
-  // calling goOnline/joinRide, otherwise they fire before the handshake
-  // completes and silently do nothing (causing the "needs a refresh" bug).
-  const waitForConnection = () => new Promise(resolve => {
-    if (isConnected()) { resolve(); return }
-    const interval = setInterval(() => {
-      if (isConnected()) { clearInterval(interval); resolve() }
-    }, 100)
-    setTimeout(() => { clearInterval(interval); resolve() }, 5000)
-  })
-  await waitForConnection()
-
   // Step 2 — register socketId in DB
   if (userStore._id) goOnline(userStore._id)
   // Step 3 — join the ride room

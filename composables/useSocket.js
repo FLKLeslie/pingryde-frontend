@@ -89,9 +89,18 @@ export const useSocket = () => {
       }
     })
 
-    socket.on('rideCancelled', ({ rideId }) => {
+    socket.on('rideCancelled', ({ rideId, cancelledBy }) => {
       if (rideStore.ride?._id?.toString() === rideId?.toString()) {
         rideStore.updateStatus('cancelled')
+        // Show who cancelled so the correct party can be redirected
+        rideStore.setCancelledBy(cancelledBy || 'other')
+      }
+    })
+
+    socket.on('rideCompletedByPassenger', ({ rideId }) => {
+      if (rideStore.ride?._id?.toString() === rideId?.toString()) {
+        rideStore.setCompletionMessage('Good job! The passenger confirmed the ride was completed successfully. 🎉')
+        rideStore.updateStatus('completed')
       }
     })
 

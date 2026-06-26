@@ -232,6 +232,7 @@ const handleAccept = (req) => {
 
   // Navigate to the map page where the driver tracks the passenger
   router.push('/driver/map')
+  // window.location.href = '/driver/map'
 }
 </script>
 

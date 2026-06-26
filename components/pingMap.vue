@@ -92,6 +92,7 @@ let nearbyLayer      = null
 let streetLayer      = null
 let satelliteLayer   = null
 let routePolyline    = null
+let markerPollId     = null   // interval that keeps markers current
 
 const isSatellite = ref(false)
 
@@ -298,6 +299,39 @@ onMounted(async () => {
   // Nearby drivers layer
   if (props.showNearby) { nearbyLayer = L.layerGroup().addTo(map); drawNearby() }
 
+  // ── Polling fallback — reads props every 2s and moves markers ─────
+  // All watcher/prop/reactivity approaches can silently miss updates in
+  // Nuxt 3. This interval reads the prop values directly and calls
+  // Leaflet's setLatLng regardless of reactivity. It is the guaranteed
+  // last resort that works even when everything else fails.
+  let lastPLat = null, lastPLng = null
+  let lastDLat = null, lastDLng = null
+  markerPollId = setInterval(() => {
+    const pc = props.passengerCoords
+    if (pc?.lat && pc?.lng && (pc.lat !== lastPLat || pc.lng !== lastPLng)) {
+      lastPLat = pc.lat; lastPLng = pc.lng
+      if (passengerMarker) {
+        passengerMarker.setLatLng([pc.lat, pc.lng])
+      } else {
+        passengerMarker = L.marker([pc.lat,pc.lng],{icon:makePersonIcon()}).addTo(map)
+        passengerMarker.bindTooltip(passengerTooltip(),{direction:'top',offset:[0,-24]})
+      }
+      if (props.role !== 'driver') map.setView([pc.lat,pc.lng], map.getZoom(), {animate:true})
+    }
+    const dc = props.driverCoords
+    if (dc?.lat && dc?.lng && (dc.lat !== lastDLat || dc.lng !== lastDLng)) {
+      lastDLat = dc.lat; lastDLng = dc.lng
+      if (driverMarker) {
+        driverMarker.setLatLng([dc.lat, dc.lng])
+      } else {
+        driverMarker = L.marker([dc.lat,dc.lng],{icon:makeVehicleIcon(props.driverType)}).addTo(map)
+        driverMarker.bindTooltip(driverTooltip(),{direction:'top',offset:[0,-20]})
+      }
+      if (props.role === 'driver') map.setView([dc.lat,dc.lng], map.getZoom(), {animate:true})
+      else map.panTo([dc.lat,dc.lng], {animate:true, duration:0.5})
+    }
+  }, 2000)
+
   // Map click in destinationMode → place/move draggable destination marker
   map.on('click', (e) => {
     if (!props.destinationMode) return
@@ -324,9 +358,9 @@ onMounted(async () => {
 })
 
 // ── Watchers ──────────────────────────────────────────────────────
+
 watch(() => [props.passengerCoords?.lat, props.passengerCoords?.lng], ([lat, lng]) => {
   if (!lat || !lng || !map || !L) return
-  const c = { lat, lng }
   const isDriver = props.role === 'driver'
   if (passengerMarker) {
     passengerMarker.setLatLng([lat, lng])
@@ -383,11 +417,13 @@ watch(() => props.nearbyDrivers, drawNearby, { deep: true })
 
 // ── Cleanup ───────────────────────────────────────────────────────
 onBeforeUnmount(() => {
+  if (markerPollId) { clearInterval(markerPollId); markerPollId = null }
   map?.remove()
   map=null; L=null
   passengerMarker=null; driverMarker=null; destMarker=null
   nearbyLayer=null; streetLayer=null; satelliteLayer=null; routePolyline=null
 })
+
 </script>
 
 <style scoped>
